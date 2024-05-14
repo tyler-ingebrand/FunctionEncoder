@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 from FunctionEncoder.Model.ModelHelpers import build_model
 
 
-class FunctionEncoder(torch.nn.Module):
+class ExperimentalFunctionEncoder(torch.nn.Module):
 
 
     def __init__(self,
@@ -22,14 +22,15 @@ class FunctionEncoder(torch.nn.Module):
                  ):
         assert len(input_size) == 1, "Only 1D input supported for now"
         assert len(output_size) == 1, "Only 1D output supported for now"
-        super(FunctionEncoder, self).__init__()
+        super(ExperimentalFunctionEncoder, self).__init__()
         self.input_size = input_size
         self.output_size = output_size
         self.n_basis = n_basis
         self.model = build_model(self.input_size, self.output_size, self.n_basis, hidden_size, n_layers, activation)
         self.opt = torch.optim.Adam(self.model.parameters(), lr=1e-3)
         self.method = method
-
+        raise Exception("This class is saved for future reference. It tries various loss functions "
+                        "to get least squares working during training. The winner was ortho3 ")
 
     def forward(self, x):
         outs = self.model(x)
@@ -113,28 +114,82 @@ class FunctionEncoder(torch.nn.Module):
 
         # method to use for representation during training
         method = self.method
-        assert method in ["inner_product", "least_squares"], f"Unknown method: {method}"
+        assert method in ["both", "inner_product", "least_squares", "combined",
+                          "ortho", "ortho1", "ortho2", "ortho3",
+                          "least_squares_no_grad", "rotate", "weight_reg", "c_reg"], f"Unknown method: {method}"
 
         bar = trange(epochs) if progress_bar else range(epochs)
         for epoch in bar:
             example_xs, example_ys, xs, ys, _ = dataset.sample(device=device)
+            loss = 0
 
             # approximate functions
-            if method == "inner_product":
+            if method == "both" or method == "inner_product":
                 # approximate
                 y_hats_ip = self.predict_from_examples(example_xs, example_ys, xs, method="inner_product")
-                prediction_loss = torch.mean((y_hats_ip - ys) ** 2)
-                loss = prediction_loss
-            if method == "least_squares":
-
+                loss = loss + torch.mean((y_hats_ip - ys) ** 2)
+            if method == "both" or method == "least_squares":
+                # approximate
+                y_hats_ls = self.predict_from_examples(example_xs, example_ys, xs, method="least_squares")
+                loss = loss + torch.mean((y_hats_ls - ys) ** 2)
+            if method == "combined":
+                raise Exception("This does not work.")
+                representation_ls = self.compute_representation(example_xs, example_ys, method="least_squares")
+                representation_ip = self.compute_representation(example_xs, example_ys, method="inner_product")
+                combined_representation = (representation_ip + representation_ls) / 2
+                y_hats = self.predict(xs, combined_representation)
+                loss = torch.mean((y_hats - ys) ** 2)
+            if "ortho" in method:
+                if method == "ortho1" or method == "ortho2":
+                    raise Exception("This does not work.")
                 representation_ls, gram = self.compute_representation(example_xs, example_ys, method="least_squares")
                 y_hats = self.predict(xs, representation_ls)
                 prediction_loss = torch.mean((y_hats - ys) ** 2)
+                ortho_loss = torch.norm(gram - torch.eye(gram.shape[-1], device=gram.device))
                 norm_loss = ((torch.diagonal(gram, dim1=1, dim2=2) - 1)**2).mean()
-                loss = prediction_loss + norm_loss
+
+                loss = prediction_loss
+                if method == "ortho2":
+                    loss = loss + ortho_loss
+                if method == "ortho3":
+                    loss = loss + norm_loss
 
                 writer.add_scalar("train/prediction_loss", prediction_loss.item(), epoch)
+                writer.add_scalar("train/ortho_loss", ortho_loss.item(), epoch)
                 writer.add_scalar("train/norm_loss", norm_loss.item(), epoch)
+            if method == "least_squares_no_grad":
+                raise Exception("This does not work.")
+
+                with torch.no_grad():
+                    representation_ls, _ = self.compute_representation(example_xs, example_ys, method="least_squares")
+                y_hats = self.predict(xs, representation_ls)
+                loss = torch.mean((y_hats - ys) ** 2)
+
+            if method == "weight_reg":
+                raise Exception("This does not work.")
+
+                # approximate
+                y_hats_ls = self.predict_from_examples(example_xs, example_ys, xs, method="least_squares")
+                loss = loss + torch.mean((y_hats_ls - ys) ** 2)
+
+                # compute sum of weights
+                weight_sum = 0
+                for p in self.parameters():
+                    weight_sum += torch.sum(p ** 2)
+                loss = loss + 1e-4 * weight_sum
+            if method == "c_reg":
+                raise Exception("This does not work.")
+
+                # approximate
+                representations_ls, _ = self.compute_representation(example_xs, example_ys, method="least_squares")
+                y_hats_ls = self.predict(xs, representations_ls)
+                loss = loss + torch.mean((y_hats_ls - ys) ** 2)
+
+                # regularize representaion towards unit norm,
+                norm = torch.norm(representations_ls, dim=-1)
+                loss = loss + torch.mean((norm - 1) ** 2)
+
+
 
             # optimize
             self.opt.zero_grad()
@@ -151,7 +206,5 @@ class FunctionEncoder(torch.nn.Module):
 
             # log
             if logdir is not None:
-                writer.add_scalar("train/prediction_loss", loss.item(), epoch)
+                writer.add_scalar("train/loss", loss.item(), epoch)
                 writer.add_scalar("train/grad_norm", norm, epoch)
-                if method == "least_squares":
-                    writer.add_scalar("train/norm_loss", norm_loss.item(), epoch)
