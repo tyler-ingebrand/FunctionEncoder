@@ -3,8 +3,8 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import torch
 
-from FunctionEncoder import FunctionEncoder, QuadraticDataset
-from FunctionEncoder.Callbacks.TestPerformanceCallback import TestPerformanceCallback
+from FunctionEncoder import DeterministicFunctionEncoder, QuadraticDataset
+from FunctionEncoder.Callbacks.TestDeterministicPerformanceCallback import TestDeterministicPerformanceCallback
 
 import argparse
 
@@ -12,7 +12,7 @@ import argparse
 # parse args
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_basis", type=int, default=11)
-parser.add_argument("--train_method", type=str, default="inner_product")
+parser.add_argument("--train_method", type=str, default="least_squares")
 parser.add_argument("--epochs", type=int, default=1_000)
 parser.add_argument("--load_path", type=str, default=None)
 parser.add_argument("--seed", type=int, default=0)
@@ -43,10 +43,10 @@ dataset = QuadraticDataset(a_range=a_range, b_range=b_range, c_range=c_range, in
 
 if load_path is None:
     # create the model
-    model = FunctionEncoder(input_size=(1,), output_size=(1,), n_basis=n_basis, method=train_method).to(device)
+    model = DeterministicFunctionEncoder(input_size=(1,), output_size=(1,), n_basis=n_basis, method=train_method).to(device)
 
     # create a testing callback
-    callback = TestPerformanceCallback(dataset, device=device)
+    callback = TestDeterministicPerformanceCallback(dataset, device=device)
 
     # train the model
     model.train_model(dataset, epochs=epochs, logdir=logdir, callback=callback)
@@ -55,7 +55,7 @@ if load_path is None:
     torch.save(model.state_dict(), f"{logdir}/model.pth")
 else:
     # load the model
-    model = FunctionEncoder(input_size=(1,), output_size=(1,), n_basis=n_basis, method=train_method).to(device)
+    model = DeterministicFunctionEncoder(input_size=(1,), output_size=(1,), n_basis=n_basis, method=train_method).to(device)
     model.load_state_dict(torch.load(f"{logdir}/model.pth"))
 
 # plot

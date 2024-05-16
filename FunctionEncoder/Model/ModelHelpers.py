@@ -4,6 +4,9 @@ import torch
 
 # Builds a function encoder with the desired specifications
 def build_model( input_size, output_size, n_basis, hidden_size, n_layers, activation):
+    assert type(input_size) == tuple, "input_size must be a tuple"
+    assert type(output_size) == tuple, "output_size must be a tuple"
+
     # get inputs
     input_size = input_size[0]  # only 1D input supported for now
     output_size = output_size[0] * n_basis
