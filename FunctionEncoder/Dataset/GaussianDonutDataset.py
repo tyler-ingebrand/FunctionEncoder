@@ -16,7 +16,7 @@ class GaussianDonutDataset(BaseDataset):
                          data_type="stochastic",
                          n_functions_per_sample=10,
                          n_examples_per_sample=100,
-                         n_points_per_sample=10_000,
+                         n_points_per_sample=1_000,
                          )
         self.radius = radius
         self.noise = noise
@@ -25,10 +25,10 @@ class GaussianDonutDataset(BaseDataset):
         self.volume = (self.highs - self.lows).prod()
 
 
-    def sample(self, device:Union[str, torch.device]) -> Tuple[ Union[torch.tensor, NoneType],
-                                                                Union[torch.tensor, NoneType],
-                                                                Union[torch.tensor, NoneType],
-                                                                Union[torch.tensor, NoneType],
+    def sample(self, device:Union[str, torch.device]) -> Tuple[ Union[torch.tensor, type(None)],
+                                                                Union[torch.tensor, type(None)],
+                                                                Union[torch.tensor, type(None)],
+                                                                Union[torch.tensor, type(None)],
                                                                 dict]:
         # sample radiuses
         radii = torch.rand((self.n_functions_per_sample, 1), device=device) * self.radius

@@ -23,7 +23,7 @@ class StochasticFunctionEncoder(torch.nn.Module):
                  n_layers=4,
                  activation:str="relu",
                  method:str="inner_product",
-                 positive_logit:float=5.0,
+                 positive_logit:float=3.0,
                  negative_logit:float=0.0,
                  ):
         assert len(input_size) == 1, "Only 1D input supported for now"
@@ -71,6 +71,9 @@ class StochasticFunctionEncoder(torch.nn.Module):
             GTG = None
         elif method == "least_squares":
             outs, GTG = self._compute_least_squares(example_xs, example_ys, **kwargs)
+        elif method == "grad_mle":
+            outs = self._compute_mle(example_xs, example_ys, **kwargs)
+            GTG = None
         else:
             raise ValueError(f"Unknown method: {method}")
 
@@ -83,14 +86,7 @@ class StochasticFunctionEncoder(torch.nn.Module):
     def _compute_inner_product(self, example_xs, example_ys):
 
         # generate data representing distributions
-        true_points = example_ys
-        true_point_logits = torch.ones(true_points.shape[0], true_points.shape[1], device=true_points.device) * self.positive_logit
-
-        random_points = self.sample(example_ys.shape[0], example_ys.shape[1], example_ys.device)
-        random_point_logits = torch.ones(random_points.shape[0], random_points.shape[1], device=random_points.device) * self.negative_logit
-
-        all_points = torch.cat([true_points, random_points], dim=1)
-        all_logits = torch.cat([true_point_logits, random_point_logits], dim=1)
+        all_points, all_logits = self.convert_samples_to_logits(example_ys)
         all_logits_matrix = all_logits.unsqueeze(1) - all_logits.unsqueeze(2)
 
         # generate data from basis
@@ -98,37 +94,75 @@ class StochasticFunctionEncoder(torch.nn.Module):
         base_logits_matrix = basis_logits.unsqueeze(1) - basis_logits.unsqueeze(2)
 
         # compute the inner product
-        representation = torch.einsum("fdek,fde->fk", base_logits_matrix, all_logits_matrix) * 0.5 * base_logits_matrix.shape[1] * self.volume
+        representation = torch.mean(base_logits_matrix * all_logits_matrix.unsqueeze(-1), dim=(1,2)) * 0.5 * self.volume
 
         return representation
 
 
 
 
-
-
-
-
-
     def _compute_least_squares(self, example_xs, example_ys, lambd=0.1):
-        raise Exception("Not implemented yet")
-        # get approximations
-        Gs = self.forward(example_xs, example_ys)
+        # generate data representing distributions
+        all_points, all_logits = self.convert_samples_to_logits(example_ys)
+        all_logits_matrix = all_logits.unsqueeze(1) - all_logits.unsqueeze(2)
 
-        # compute the matrix G^TG, plus some regularization term
-        GTG = torch.einsum("fdmk, fdml->fdkl", Gs, Gs) # computes element wise inner products, IE dot product, between all pairs of basis functions
-        GTG = torch.mean(GTG, dim=1) # Computes the function wise inner product between all pairs of basis functions
-        # eigen_values, R = torch.linalg.eigh(GTG)
-        # GTG_reg = R @ R.transpose(-1, -2) # Regularize the matrix by setting it to be orthogonal
-        GTG_reg = GTG + lambd * torch.eye(GTG.shape[-1], device=GTG.device)
+        # generate data from basis
+        basis_logits = self.forward(None, all_points)
+        base_logits_matrix = basis_logits.unsqueeze(1) - basis_logits.unsqueeze(2)
 
-        # compute the matrix G^TF
-        GTF = torch.einsum("fdmk,fdm->fdk", Gs, example_ys) # computes element wise inner products, IE dot product
-        GTF = torch.mean(GTF, dim=1).unsqueeze(-1) # Computes the function wise inner product
+        base_logits_self_sim = base_logits_matrix.unsqueeze(3) * base_logits_matrix.unsqueeze(4)
+        gram = torch.mean(base_logits_self_sim, dim=(1, 2)) * 0.5 * self.volume
+        gram_reg = gram + lambd * torch.eye(self.n_basis, device=gram.device)
 
-        # Compute (G^TG)^-1 G^TF
-        representation = GTG_reg.inverse() @ GTF
-        return representation.squeeze(-1), GTG
+        # compute the inner product
+        GF = torch.mean(base_logits_matrix * all_logits_matrix.unsqueeze(-1), dim=(1,2)) * 0.5 * self.volume
+        representation = torch.einsum("fkl, fk->fl", torch.inverse(gram_reg), GF)
+
+        return representation, gram
+
+    def _compute_mle(self, example_xs, example_ys, grad_steps=10_000):
+        # init the reps to grad
+        representations = torch.randn(example_ys.shape[0], self.n_basis, device=example_ys.device)
+        representations *=  0.1
+        representations.requires_grad = True
+        opti = torch.optim.Adam([representations], lr=1e-3)
+
+        # collect random data to compute sums with
+        n_samples = example_ys.shape[1] * 10
+
+        # get random every time
+        with torch.no_grad():
+            random_ys = self.sample(example_ys.shape[0], n_samples, example_ys.device)
+            G_random_logits = self.forward(None, random_ys)
+
+        # compute basis just once, no grad needed
+        with torch.no_grad():
+            G_example_logits = self.forward(None, example_ys)
+
+        # use grad descent to find the mle estimator of the representations
+        for i in range(grad_steps):
+            # compute the log probs via the representations
+            random_logits = torch.einsum("fdk,fk->fd", G_random_logits, representations)
+
+            # Compute sum of exponentials
+            e_random_logits = torch.exp(random_logits)
+            sums = torch.mean(e_random_logits, dim=1) * self.volume
+
+            # compute example log probs
+            log_prob = -n_samples * torch.log(sums + 1e-7) + torch.einsum("fdk,fk->f", G_example_logits, representations)
+
+
+            # descent step
+            loss = -torch.mean(log_prob)
+            opti.zero_grad()
+            loss.backward()
+            norm = torch.nn.utils.clip_grad_norm_(representations, 1)
+            opti.step()
+            print(f"Inner loss: {loss:.3f}, Norm: {norm:.3f}")
+
+        representations = representations.detach()  # no need to track gradients anymore
+        return representations
+
 
     def predict(self, xs, ys, representations):
         Gs = self.forward(xs, ys)
@@ -139,6 +173,18 @@ class StochasticFunctionEncoder(torch.nn.Module):
         representations, _ = self.compute_representation(example_xs, example_ys, method=method, **kwargs)
         log_probs = self.predict(xs, ys, representations)
         return log_probs # log(p(y|x))
+
+    def convert_samples_to_logits(self, ys):
+        # generate data representing distributions
+        true_points = ys
+        true_point_logits = torch.ones(true_points.shape[0], true_points.shape[1], device=true_points.device) * self.positive_logit
+
+        random_points = self.sample(ys.shape[0], ys.shape[1], ys.device)
+        random_point_logits = torch.ones(random_points.shape[0], random_points.shape[1], device=random_points.device) * self.negative_logit
+
+        all_points = torch.cat([true_points, random_points], dim=1)
+        all_logits = torch.cat([true_point_logits, random_point_logits], dim=1)
+        return all_points, all_logits
 
     def train_model(self,
                     dataset: BaseDataset,
@@ -165,16 +211,29 @@ class StochasticFunctionEncoder(torch.nn.Module):
             # approximate functions
             if method == "inner_product":
                 # approximate
-                logits_ip = self.predict_from_examples(example_xs, example_ys, xs, ys, method="inner_product")
-                logit_loss = -torch.mean(logits_ip)
+                representation_ip, _ = self.compute_representation(example_xs, example_ys, method="inner_product")
+                all_points, all_logits = self.convert_samples_to_logits(ys)
+                approximate_logits = self.predict(None, all_points, representation_ip)
+                error_vector = all_logits - approximate_logits
+                error_matrix = error_vector.unsqueeze(1) - error_vector.unsqueeze(2)
+                error_ip = torch.mean(error_matrix ** 2, dim=(1, 2))
+                logit_loss = torch.mean(error_ip)
                 loss = logit_loss
             if method == "least_squares":
-                raise Exception("Not implemented yet")
                 representation_ls, gram = self.compute_representation(example_xs, example_ys, method="least_squares")
-                y_hats = self.predict(xs, representation_ls)
-                prediction_loss = torch.mean((y_hats - ys) ** 2)
-                norm_loss = ((torch.diagonal(gram, dim1=1, dim2=2) - 1)**2).mean()
-                loss = prediction_loss + norm_loss
+
+                # logit loss
+                all_points, all_logits = self.convert_samples_to_logits(ys)
+                approximate_logits = self.predict(None, all_points, representation_ls)
+                error_vector = all_logits - approximate_logits
+                error_matrix = error_vector.unsqueeze(1) - error_vector.unsqueeze(2)
+                error_ip = torch.mean(error_matrix ** 2, dim=(1, 2))
+                logit_loss = torch.mean(error_ip)
+
+                # gram loss
+                norm_loss = ((torch.diagonal(gram, dim1=-2, dim2=-1) - 1)** 2).mean()
+
+                loss = logit_loss + norm_loss
 
             # optimize
             self.opt.zero_grad()

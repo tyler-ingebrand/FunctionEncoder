@@ -1,4 +1,3 @@
-from types import NoneType
 from typing import Tuple, Union
 
 import torch
@@ -31,10 +30,10 @@ class QuadraticDataset(BaseDataset):
         self.c_range = c_range
         self.input_range = input_range
 
-    def sample(self, device:Union[str, torch.device] ="auto") -> Tuple[ Union[torch.tensor, NoneType],
-                                                                Union[torch.tensor, NoneType],
-                                                                Union[torch.tensor, NoneType],
-                                                                Union[torch.tensor, NoneType],
+    def sample(self, device:Union[str, torch.device] ="auto") -> Tuple[ Union[torch.tensor, type(None)],
+                                                                Union[torch.tensor, type(None)],
+                                                                Union[torch.tensor, type(None)],
+                                                                Union[torch.tensor, type(None)],
                                                                 dict]:
         with torch.no_grad():
             device = device if device != "auto" else "cuda" if torch.cuda.is_available() else "cpu"

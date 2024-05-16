@@ -30,10 +30,10 @@ class FixedDataset(BaseDataset):
         self.ys = ys
 
 
-    def sample(self, device:Union[str, torch.device]) -> Tuple[ Union[torch.tensor, NoneType],
-                                                                Union[torch.tensor, NoneType],
-                                                                Union[torch.tensor, NoneType],
-                                                                Union[torch.tensor, NoneType],
+    def sample(self, device:Union[str, torch.device]) -> Tuple[ Union[torch.tensor, type(None)],
+                                                                Union[torch.tensor, type(None)],
+                                                                Union[torch.tensor, type(None)],
+                                                                Union[torch.tensor, type(None)],
                                                                 dict]:
         function_indicies = torch.randint(0, self.n_functions, (self.n_functions_per_sample,), device=device)
         example_indicies = torch.randint(0, self.n_samples_per_function, (self.n_examples_per_sample,), device=device)

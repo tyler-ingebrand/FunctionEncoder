@@ -6,12 +6,13 @@ import torch
 
 from FunctionEncoder import GaussianDonutDataset
 from FunctionEncoder import StochasticFunctionEncoder
+from FunctionEncoder import TestStochasticPerformanceCallback
 
 # parse args
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_basis", type=int, default=11)
 parser.add_argument("--train_method", type=str, default="inner_product")
-parser.add_argument("--epochs", type=int, default=100)
+parser.add_argument("--epochs", type=int, default=1000)
 parser.add_argument("--load_path", type=str, default=None)
 parser.add_argument("--seed", type=int, default=0)
 args = parser.parse_args()
@@ -42,8 +43,7 @@ if load_path is None:
     model = StochasticFunctionEncoder(input_size=(0,), output_size=(2,), n_basis=n_basis, method=train_method, sample=sample, volume=volume).to(device)
 
     # create a testing callback
-    # callback = TestPerformanceCallback(dataset, device=device)
-    callback = None
+    callback = TestStochasticPerformanceCallback(dataset, device=device)
 
     # train the model
     model.train_model(dataset, epochs=epochs, logdir=logdir, callback=callback)
@@ -73,7 +73,9 @@ with torch.no_grad():
     xs = None
     grid = torch.arange(-1, 1, 0.02, device=device)
     ys = torch.stack(torch.meshgrid(grid, grid), dim=-1).reshape(-1, 2).expand(10, -1, -1)
-    logits = model.predict_from_examples(example_xs, example_ys, xs, ys, method="inner_product")
+logits = model.predict_from_examples(example_xs, example_ys, xs, ys, method="grad_mle") # args.train_method)
+
+with torch.no_grad():
     e_logits = torch.exp(logits)
     sums = torch.mean(e_logits, dim=1, keepdim=True) * dataset.volume
     pdf = e_logits / sums

@@ -1,4 +1,4 @@
-from types import NoneType
+# from types import NoneType
 
 import torch
 from abc import abstractmethod
@@ -32,9 +32,9 @@ class BaseDataset:
         self.n_points_per_sample = n_points_per_sample
 
     @abstractmethod
-    def sample(self, device:Union[str, torch.device]) -> Tuple[ Union[torch.tensor, NoneType],
-                                                                Union[torch.tensor, NoneType],
-                                                                Union[torch.tensor, NoneType],
-                                                                Union[torch.tensor, NoneType],
+    def sample(self, device:Union[str, torch.device]) -> Tuple[ Union[torch.tensor, type(None)],
+                                                                Union[torch.tensor, type(None)],
+                                                                Union[torch.tensor, type(None)],
+                                                                Union[torch.tensor, type(None)],
                                                                 dict]:
         pass
