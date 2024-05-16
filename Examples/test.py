@@ -55,3 +55,10 @@ print("Method 3:")
 print(sum3.shape)
 print(sum3)
 print()
+
+# method 4. Flatten matrices
+sum4 = combined.reshape(-1, k).T @ outer_products_cs.reshape(-1)
+print("Method 4:")
+print(sum4.shape)
+print(sum4)
+print()
