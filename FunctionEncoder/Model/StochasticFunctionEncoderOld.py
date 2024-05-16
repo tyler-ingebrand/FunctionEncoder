@@ -83,32 +83,18 @@ class StochasticFunctionEncoder(torch.nn.Module):
             outs = outs.squeeze(0)
         return outs, GTG
 
-    def inner_product(self, logits_1, logits_2):
-        mean_1 = torch.mean(logits_1, dim=1, keepdim=True)
-        mean_2 = torch.mean(logits_2, dim=1, keepdim=True)
-        logits_1 = logits_1 - mean_1
-        logits_2 = logits_2 - mean_2
-        if len(logits_1.shape) == 2 and len(logits_2.shape) == 2:
-            return torch.einsum("fd,fd->f", logits_1, logits_2)
-        elif len(logits_1.shape) == 2 and len(logits_2.shape) == 3:
-            return torch.einsum("fd, fdk -> fk", logits_1, logits_2)
-        elif len(logits_1.shape) == 3 and len(logits_2.shape) == 3:
-            return torch.einsum("fdk, fdl -> fkl", logits_1, logits_2)
-
-    def norm(self, logits):
-        mean = torch.mean(logits, dim=1, keepdim=True)
-        logits = logits - mean
-        return torch.sum(logits ** 2, dim=1)**0.5
-
     def _compute_inner_product(self, example_xs, example_ys):
+
         # generate data representing distributions
         all_points, all_logits = self.convert_samples_to_logits(example_ys)
+        all_logits_matrix = all_logits.unsqueeze(1) - all_logits.unsqueeze(2)
 
         # generate data from basis
         basis_logits = self.forward(None, all_points)
+        base_logits_matrix = basis_logits.unsqueeze(1) - basis_logits.unsqueeze(2)
 
         # compute the inner product
-        representation = self.inner_product(all_logits, basis_logits)
+        representation = torch.mean(base_logits_matrix * all_logits_matrix.unsqueeze(-1), dim=(1,2)) * 0.5 * self.volume
 
         return representation
 
@@ -117,20 +103,20 @@ class StochasticFunctionEncoder(torch.nn.Module):
 
     def _compute_least_squares(self, example_xs, example_ys, lambd=0.1, n_samples=None):
         # generate data representing distributions
-        all_points, all_logits = self.convert_samples_to_logits(example_ys)
+        all_points, all_logits = self.convert_samples_to_logits(example_ys, n_samples=n_samples)
+        all_logits_matrix = all_logits.unsqueeze(1) - all_logits.unsqueeze(2)
 
         # generate data from basis
         basis_logits = self.forward(None, all_points)
+        base_logits_matrix = basis_logits.unsqueeze(1) - basis_logits.unsqueeze(2)
 
-        # compute gram
-        gram = self.inner_product(basis_logits, basis_logits)
+        base_logits_self_sim = base_logits_matrix.unsqueeze(3) * base_logits_matrix.unsqueeze(4)
+        gram = torch.mean(base_logits_self_sim, dim=(1, 2)) * 0.5 * self.volume
         gram_reg = gram + lambd * torch.eye(self.n_basis, device=gram.device)
 
-        # compute the inner product of basis and data
-        GF = self.inner_product(all_logits, basis_logits)
-
-        # compute ls solution
-        representation = torch.einsum("fkl, fl -> fk", gram_reg.inverse(), GF)
+        # compute the inner product
+        GF = torch.mean(base_logits_matrix * all_logits_matrix.unsqueeze(-1), dim=(1,2)) * 0.5 * self.volume
+        representation = torch.einsum("fkl, fk->fl", torch.inverse(gram_reg), GF)
 
         return representation, gram
 
@@ -227,34 +213,25 @@ class StochasticFunctionEncoder(torch.nn.Module):
                 # approximate
                 representation_ip, _ = self.compute_representation(example_xs, example_ys, method="inner_product")
                 all_points, all_logits = self.convert_samples_to_logits(ys)
-                predicted_logits = self.predict(None, all_points, representation_ip)
-                logit_dif = all_logits - predicted_logits
-                ip = self.norm(logit_dif)
-                logit_loss = torch.mean(ip)
+                approximate_logits = self.predict(None, all_points, representation_ip)
+                error_vector = all_logits - approximate_logits
+                error_matrix = error_vector.unsqueeze(1) - error_vector.unsqueeze(2)
+                error_ip = torch.mean(error_matrix ** 2, dim=(1, 2))
+                logit_loss = torch.mean(error_ip)
                 loss = logit_loss
-
-                # all_points, all_logits = self.convert_samples_to_logits(ys)
-                # logits = self.predict(None, all_points, representation_ip)
-                # logit_loss = -torch.mean(logits[:, :ys.shape[1]]) + torch.mean(torch.logsumexp(logits, dim=1))
-                # loss = logit_loss
-
-
             if method == "least_squares":
                 representation_ls, gram = self.compute_representation(example_xs, example_ys, method="least_squares")
 
+                # logit loss
                 all_points, all_logits = self.convert_samples_to_logits(ys)
-                predicted_logits = self.predict(None, all_points, representation_ls)
-                logit_dif = all_logits - predicted_logits
-                ip = self.norm(logit_dif)
-                logit_loss = torch.mean(ip)
-
-                # all_points, all_logits = self.convert_samples_to_logits(ys)
-                # logits = self.predict(None, all_points, representation_ls)
-                # logit_loss = -torch.mean(logits[:, :ys.shape[1]]) + torch.mean(torch.logsumexp(logits, dim=1))
+                approximate_logits = self.predict(None, all_points, representation_ls)
+                error_vector = all_logits - approximate_logits
+                error_matrix = error_vector.unsqueeze(1) - error_vector.unsqueeze(2)
+                error_ip = torch.mean(error_matrix ** 2, dim=(1, 2))
+                logit_loss = torch.mean(error_ip)
 
                 if epoch == epochs - 1:
                     pass
-
                 # gram loss
                 norm_loss = ((torch.diagonal(gram, dim1=-2, dim2=-1) - 1)** 2).mean()
 
