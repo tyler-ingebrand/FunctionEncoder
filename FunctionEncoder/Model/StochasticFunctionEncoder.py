@@ -101,9 +101,9 @@ class StochasticFunctionEncoder(torch.nn.Module):
 
 
 
-    def _compute_least_squares(self, example_xs, example_ys, lambd=0.1):
+    def _compute_least_squares(self, example_xs, example_ys, lambd=0.1, n_samples=None):
         # generate data representing distributions
-        all_points, all_logits = self.convert_samples_to_logits(example_ys)
+        all_points, all_logits = self.convert_samples_to_logits(example_ys, n_samples=n_samples)
         all_logits_matrix = all_logits.unsqueeze(1) - all_logits.unsqueeze(2)
 
         # generate data from basis
@@ -173,12 +173,13 @@ class StochasticFunctionEncoder(torch.nn.Module):
         log_probs = self.predict(xs, ys, representations)
         return log_probs # log(p(y|x))
 
-    def convert_samples_to_logits(self, ys):
+    def convert_samples_to_logits(self, ys, n_samples=None):
         # generate data representing distributions
         true_points = ys
         true_point_logits = torch.ones(true_points.shape[0], true_points.shape[1], device=true_points.device) * self.positive_logit
 
-        random_points = self.sample(ys.shape[0], ys.shape[1], ys.device)
+        n_samples = n_samples or ys.shape[1]
+        random_points = self.sample(ys.shape[0], n_samples, ys.device)
         random_point_logits = torch.ones(random_points.shape[0], random_points.shape[1], device=random_points.device) * self.negative_logit
 
         all_points = torch.cat([true_points, random_points], dim=1)
@@ -229,6 +230,8 @@ class StochasticFunctionEncoder(torch.nn.Module):
                 error_ip = torch.mean(error_matrix ** 2, dim=(1, 2))
                 logit_loss = torch.mean(error_ip)
 
+                if epoch == epochs - 1:
+                    pass
                 # gram loss
                 norm_loss = ((torch.diagonal(gram, dim1=-2, dim2=-1) - 1)** 2).mean()
 
