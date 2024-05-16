@@ -73,8 +73,12 @@ with torch.no_grad():
     xs = None
     grid = torch.arange(-1, 1, 0.02, device=device)
     ys = torch.stack(torch.meshgrid(grid, grid), dim=-1).reshape(-1, 2).expand(10, -1, -1)
-logits = model.predict_from_examples(example_xs, example_ys, xs, ys, method="grad_mle") # args.train_method)
 
+# representation_mle, _ = model.compute_representation(example_xs, example_ys, method="grad_mle")
+# representation_ip, _ = model.compute_representation(example_xs, example_ys, method="inner_product")
+# representation_ls, _ = model.compute_representation(example_xs, example_ys, method="least_squares")
+# logits = log_probs = model.predict(xs, ys, representation_mle)
+logits = model.predict_from_examples(example_xs, example_ys, xs, ys, method=args.train_method)
 with torch.no_grad():
     e_logits = torch.exp(logits)
     sums = torch.mean(e_logits, dim=1, keepdim=True) * dataset.volume

@@ -23,8 +23,8 @@ class StochasticFunctionEncoder(torch.nn.Module):
                  n_layers=4,
                  activation:str="relu",
                  method:str="inner_product",
-                 positive_logit:float=3.0,
-                 negative_logit:float=0.0,
+                 positive_logit:float=5.0,
+                 negative_logit:float=-5.0,
                  ):
         assert len(input_size) == 1, "Only 1D input supported for now"
         assert len(output_size) == 1, "Only 1D output supported for now"
@@ -120,7 +120,7 @@ class StochasticFunctionEncoder(torch.nn.Module):
 
         return representation, gram
 
-    def _compute_mle(self, example_xs, example_ys, grad_steps=10_000):
+    def _compute_mle(self, example_xs, example_ys, grad_steps=100_000):
         # init the reps to grad
         representations = torch.randn(example_ys.shape[0], self.n_basis, device=example_ys.device)
         representations *=  0.1
@@ -128,11 +128,9 @@ class StochasticFunctionEncoder(torch.nn.Module):
         opti = torch.optim.Adam([representations], lr=1e-3)
 
         # collect random data to compute sums with
-        n_samples = example_ys.shape[1] * 10
-
         # get random every time
         with torch.no_grad():
-            random_ys = self.sample(example_ys.shape[0], n_samples, example_ys.device)
+            random_ys = self.sample(example_ys.shape[0], example_ys.shape[1] * 10, example_ys.device)
             G_random_logits = self.forward(None, random_ys)
 
         # compute basis just once, no grad needed
@@ -140,7 +138,8 @@ class StochasticFunctionEncoder(torch.nn.Module):
             G_example_logits = self.forward(None, example_ys)
 
         # use grad descent to find the mle estimator of the representations
-        for i in range(grad_steps):
+        tbar = trange(grad_steps)
+        for i in tbar:
             # compute the log probs via the representations
             random_logits = torch.einsum("fdk,fk->fd", G_random_logits, representations)
 
@@ -149,7 +148,7 @@ class StochasticFunctionEncoder(torch.nn.Module):
             sums = torch.mean(e_random_logits, dim=1) * self.volume
 
             # compute example log probs
-            log_prob = -n_samples * torch.log(sums + 1e-7) + torch.einsum("fdk,fk->f", G_example_logits, representations)
+            log_prob = -example_ys.shape[1] * torch.log(sums + 1e-7) + torch.einsum("fdk,fk->f", G_example_logits, representations)
 
 
             # descent step
@@ -158,7 +157,7 @@ class StochasticFunctionEncoder(torch.nn.Module):
             loss.backward()
             norm = torch.nn.utils.clip_grad_norm_(representations, 1)
             opti.step()
-            print(f"Inner loss: {loss:.3f}, Norm: {norm:.3f}")
+            tbar.set_description(f"Loss: {loss:.3f}, Norm: {norm:.3f}")
 
         representations = representations.detach()  # no need to track gradients anymore
         return representations
