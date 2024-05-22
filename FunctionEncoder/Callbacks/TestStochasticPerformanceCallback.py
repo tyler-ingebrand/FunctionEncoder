@@ -17,7 +17,7 @@ class TestStochasticPerformanceCallback(BaseCallback):
             example_xs, example_ys, xs, ys, info = self.testing_dataset.sample(device=self.device)
 
             # compute representation
-            logits = function_encoder.predict_from_examples(example_xs, example_ys, xs, ys, method="least_squares")
+            logits = function_encoder.predict_from_examples(example_xs, example_ys, xs, ys, method="mle")
 
             # measure mean_log_prob
             loss = -torch.mean(logits)
