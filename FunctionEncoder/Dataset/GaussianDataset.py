@@ -13,7 +13,7 @@ class GaussianDataset(BaseDataset):
                          output_size=(1,),
                          total_n_functions=float("inf"),
                          total_n_samples_per_function=float("inf"),
-                         data_type="deterministic",
+                         data_type="stochastic",
                          n_functions_per_sample=10,
                          n_examples_per_sample=1000,
                          n_points_per_sample=1_000,

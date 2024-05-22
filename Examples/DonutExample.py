@@ -4,15 +4,13 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import torch
 
-from FunctionEncoder import GaussianDonutDataset
-from FunctionEncoder import StochasticFunctionEncoderNew
-from FunctionEncoder import TestStochasticPerformanceCallback
+from FunctionEncoder import GaussianDonutDataset, FunctionEncoder, NLLCallback
 
 # parse args
 parser = argparse.ArgumentParser()
-parser.add_argument("--n_basis", type=int, default=11)
-parser.add_argument("--train_method", type=str, default="inner_product")
-parser.add_argument("--epochs", type=int, default=10000)
+parser.add_argument("--n_basis", type=int, default=100)
+parser.add_argument("--train_method", type=str, default="least_squares")
+parser.add_argument("--epochs", type=int, default=10_000)
 parser.add_argument("--load_path", type=str, default=None)
 parser.add_argument("--seed", type=int, default=0)
 args = parser.parse_args()
@@ -25,7 +23,7 @@ train_method = args.train_method
 seed = args.seed
 load_path = args.load_path
 if load_path is None:
-    logdir = f"logs/donut_example_new/{train_method}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+    logdir = f"logs/donut_example/{train_method}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
 else:
     logdir = load_path
 
@@ -35,15 +33,17 @@ torch.manual_seed(seed)
 
 # create dataset
 dataset = GaussianDonutDataset(noise=0.1)
-sample = dataset.sample_inputs
-volume = dataset.volume
 
 if load_path is None:
     # create the model
-    model = StochasticFunctionEncoderNew(input_size=(0,), output_size=(2,), n_basis=n_basis, method=train_method, sample=sample, volume=volume).to(device)
+    model = FunctionEncoder(input_size=dataset.input_size,
+                            output_size=dataset.output_size,
+                            data_type=dataset.data_type,
+                            n_basis=n_basis,
+                            method=train_method).to(device)
 
     # create a testing callback
-    callback = TestStochasticPerformanceCallback(dataset, device=device)
+    callback = NLLCallback(dataset, device=device)
 
     # train the model
     model.train_model(dataset, epochs=epochs, logdir=logdir, callback=callback)
@@ -52,7 +52,11 @@ if load_path is None:
     torch.save(model.state_dict(), f"{logdir}/model.pth")
 else:
     # load the model
-    model = StochasticFunctionEncoderNew(input_size=(0,), output_size=(2,), n_basis=n_basis, method=train_method).to(device)
+    model = FunctionEncoder(input_size=dataset.input_size,
+                            output_size=dataset.output_size,
+                            data_type=dataset.data_type,
+                            n_basis=n_basis,
+                            method=train_method).to(device)
     model.load_state_dict(torch.load(f"{logdir}/model.pth"))
 
 
@@ -64,39 +68,29 @@ with torch.no_grad():
     gs = plt.GridSpec(n_rows, n_cols + 1,  width_ratios=[4, 4, 4, 1])
     axes = [fig.add_subplot(gs[i // n_cols, i % n_cols], aspect='equal') for i in range(n_cols * n_rows)]
 
-
-
     example_xs, example_ys, _, _, info = dataset.sample("cuda")
 
     # compute pdf over full space
     # compute pdf at grid points and plot using plt
-    xs = None
     grid = torch.arange(-1, 1, 0.02, device=device)
-    ys = torch.stack(torch.meshgrid(grid, grid), dim=-1).reshape(-1, 2).expand(10, -1, -1)
+    xs = torch.stack(torch.meshgrid(grid, grid, indexing="ij"), dim=-1).reshape(-1, 2).expand(10, -1, -1)
 
-# representation_mle, _ = model.compute_representation(example_xs, example_ys, method="grad_mle")
-# representation_ip, _ = model.compute_representation(example_xs, example_ys, method="inner_product")
-# representation_ls, _ = model.compute_representation(example_xs, example_ys, method="least_squares")
-# logits = log_probs = model.predict(xs, ys, representation_mle)
-logits = model.predict_from_examples(example_xs, example_ys, xs, ys, method="osip")
-with torch.no_grad():
-    # e_logits = torch.exp(logits)
-    # sums = torch.mean(e_logits, dim=1, keepdim=True) * dataset.volume
-    # pdf = e_logits / sums
-    # grid = grid.to("cpu").numpy()
-    # pdf = pdf.to("cpu").numpy()
-    # pdf = pdf.reshape(10, len(grid), len(grid))
-
-    pdf = logits
-    pdf = pdf.reshape(10, len(grid), len(grid)).to("cpu").numpy()
+    # compute pdf
+    logits = model.predict_from_examples(example_xs, example_ys, xs, method=args.train_method)
+    e_logits = torch.exp(logits)
+    sums = torch.mean(e_logits, dim=1, keepdim=True) * dataset.volume
+    pdf = e_logits / sums
     grid = grid.to("cpu").numpy()
+    pdf = pdf.to("cpu").numpy()
+    pdf = pdf.reshape(10, len(grid), len(grid))
+
 
 
     radii = info["radii"]
     for i in range(9):
         ax = axes[i ]
         ax.contourf(grid, grid, pdf[i], levels=100, cmap="Reds", )
-        ax.scatter(example_ys[i, :, 0].cpu(), example_ys[i, :, 1].cpu(), color="black", s=1, alpha=0.5)
+        ax.scatter(example_xs[i, :example_xs.shape[1]//2, 0].cpu(), example_xs[i, :example_xs.shape[1]//2, 1].cpu(), color="black", s=1, alpha=0.5)
         circle = plt.Circle((0, 0), radii[i], color='b', fill=False)
         ax.add_artist(circle)
 

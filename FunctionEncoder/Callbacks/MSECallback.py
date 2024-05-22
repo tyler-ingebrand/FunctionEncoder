@@ -1,17 +1,17 @@
 import torch
 
-from FunctionEncoder import DeterministicFunctionEncoder
+from FunctionEncoder import FunctionEncoder
 from FunctionEncoder.Callbacks.BaseCallback import BaseCallback
 
 
-class TestDeterministicPerformanceCallback(BaseCallback):
+class MSECallback(BaseCallback):
 
     def __init__(self, testing_dataset, device):
-        super(TestDeterministicPerformanceCallback, self).__init__()
+        super(MSECallback, self).__init__()
         self.testing_dataset = testing_dataset
         self.device = device
 
-    def on_step_begin(self, function_encoder:DeterministicFunctionEncoder) -> dict:
+    def on_step_begin(self, function_encoder:FunctionEncoder) -> dict:
         with torch.no_grad():
             # sample testing data
             example_xs, example_ys, xs, ys, info = self.testing_dataset.sample(device=self.device)
@@ -22,5 +22,5 @@ class TestDeterministicPerformanceCallback(BaseCallback):
             # measure mse
             loss = torch.mean((ys - y_hats) ** 2).item()
 
-            return {"test/loss": loss}
+            return {"test/mse": loss}
 

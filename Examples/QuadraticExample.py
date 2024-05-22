@@ -3,8 +3,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import torch
 
-from FunctionEncoder import DeterministicFunctionEncoder, QuadraticDataset
-from FunctionEncoder.Callbacks.TestDeterministicPerformanceCallback import TestDeterministicPerformanceCallback
+from FunctionEncoder import  QuadraticDataset, FunctionEncoder, MSECallback
 
 import argparse
 
@@ -22,7 +21,7 @@ args = parser.parse_args()
 # hyper params
 epochs = args.epochs
 n_basis = args.n_basis
-device = "cuda"
+device = "cuda" if torch.cuda.is_available() else "cpu"
 train_method = args.train_method
 seed = args.seed
 load_path = args.load_path
@@ -43,10 +42,14 @@ dataset = QuadraticDataset(a_range=a_range, b_range=b_range, c_range=c_range, in
 
 if load_path is None:
     # create the model
-    model = DeterministicFunctionEncoder(input_size=(1,), output_size=(1,), n_basis=n_basis, method=train_method).to(device)
+    model = FunctionEncoder(input_size=dataset.input_size,
+                            output_size=dataset.output_size,
+                            data_type=dataset.data_type,
+                            n_basis=n_basis,
+                            method=train_method).to(device)
 
     # create a testing callback
-    callback = TestDeterministicPerformanceCallback(dataset, device=device)
+    callback = MSECallback(dataset, device=device)
 
     # train the model
     model.train_model(dataset, epochs=epochs, logdir=logdir, callback=callback)
@@ -55,7 +58,11 @@ if load_path is None:
     torch.save(model.state_dict(), f"{logdir}/model.pth")
 else:
     # load the model
-    model = DeterministicFunctionEncoder(input_size=(1,), output_size=(1,), n_basis=n_basis, method=train_method).to(device)
+    model = FunctionEncoder(input_size=dataset.input_size,
+                            output_size=dataset.output_size,
+                            data_type=dataset.data_type,
+                            n_basis=n_basis,
+                            method=train_method).to(device)
     model.load_state_dict(torch.load(f"{logdir}/model.pth"))
 
 # plot
@@ -64,19 +71,22 @@ with torch.no_grad():
     n_examples = 100
     example_xs, example_ys, xs, ys, info = dataset.sample(device)
     example_xs, example_ys = example_xs[:, :n_examples, :], example_ys[:, :n_examples, :]
+    if train_method == "inner_product":
+        y_hats_ip = model.predict_from_examples(example_xs, example_ys, xs, method="inner_product")
     y_hats_ls = model.predict_from_examples(example_xs, example_ys, xs, method="least_squares")
-    y_hats_ip = model.predict_from_examples(example_xs, example_ys, xs, method="inner_product")
     xs, indicies = torch.sort(xs, dim=-2)
     ys = ys.gather(dim=-2, index=indicies)
     y_hats_ls = y_hats_ls.gather(dim=-2, index=indicies)
-    y_hats_ip = y_hats_ip.gather(dim=-2, index=indicies)
+    if train_method == "inner_product":
+        y_hats_ip = y_hats_ip.gather(dim=-2, index=indicies)
 
     fig, axs = plt.subplots(3, 3, figsize=(15, 10))
     for i in range(n_plots):
         ax = axs[i // 3, i % 3]
         ax.plot(xs[i].cpu(), ys[i].cpu(), label="True")
         ax.plot(xs[i].cpu(), y_hats_ls[i].cpu(), label="LS")
-        ax.plot(xs[i].cpu(), y_hats_ip[i].cpu(), label="IP")
+        if train_method == "inner_product":
+            ax.plot(xs[i].cpu(), y_hats_ip[i].cpu(), label="IP")
         if i == n_plots - 1:
             ax.legend()
         title = f"${info['As'][i].item():.2f}x^2 + {info['Bs'][i].item():.2f}x + {info['Cs'][i].item():.2f}$"
@@ -87,19 +97,13 @@ with torch.no_grad():
     plt.tight_layout()
     plt.savefig(f"{logdir}/plot.png")
     plt.clf()
-    # print corresponding MSEs
-    mse_ls = ((ys - y_hats_ls) ** 2).mean()
-    mse_ip = ((ys - y_hats_ip) ** 2).mean()
-    print(f"MSE LS: {mse_ls.item()}")
-    print(f"MSE IP: {mse_ip.item()}")
-
 
     # plot the basis functions
     fig, ax = plt.subplots(1, 1, figsize=(15, 10))
-    xs = torch.linspace(input_range[0], input_range[1], 1_000).unsqueeze(-1).to(device)
+    xs = torch.linspace(input_range[0], input_range[1], 1_000).reshape(1000, 1).to(device)
     basis = model.forward(xs)
     for i in range(n_basis):
-        ax.plot(xs.cpu(), basis[:, 0, i].cpu())
+        ax.plot(xs.flatten().cpu(), basis[:, 0, i].cpu())
     plt.tight_layout()
     plt.savefig(f"{logdir}/basis.png")
 

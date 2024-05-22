@@ -26,7 +26,7 @@ class BaseDataset:
         self.output_size = output_size
         self.n_functions = total_n_functions # may be infinite
         self.n_samples_per_function = total_n_samples_per_function # may be infinite
-        self.data_type = data_type
+        self.data_type = data_type.lower()
         self.n_functions_per_sample = n_functions_per_sample
         self.n_examples_per_sample = n_examples_per_sample
         self.n_points_per_sample = n_points_per_sample
