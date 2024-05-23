@@ -118,7 +118,8 @@ class FunctionEncoder(torch.nn.Module):
 
         # compute inner products
         element_wise_inner_products = torch.einsum("fdmk,fdml->fdkl", fs, gs)
-        inner_product = torch.mean(element_wise_inner_products, dim=1)
+        inner_product = torch.mean(element_wise_inner_products, dim=1) # sum or mean??
+        # Technically we should multiply by volume, but we are assuming that the volume is 1 since it is often not known
 
         # reshape
         if unsqueezed_fs:
@@ -177,6 +178,9 @@ class FunctionEncoder(torch.nn.Module):
         # if logdir is provided, use tensorboard
         if logdir is not None:
             writer = SummaryWriter(logdir)
+            params = self._param_string()
+            for key, value in params.items():
+                writer.add_text(key, value, 0)
 
         # method to use for representation during training
         assert self.method in ["inner_product", "least_squares"], f"Unknown method: {self.method}"
@@ -217,3 +221,17 @@ class FunctionEncoder(torch.nn.Module):
                 writer.add_scalar("train/grad_norm", norm, epoch)
                 if self.method == "least_squares":
                     writer.add_scalar("train/norm_loss", norm_loss.item(), epoch)
+
+    def _param_string(self):
+        params = {}
+        params["input_size"] = self.input_size
+        params["output_size"] = self.output_size
+        params["n_basis"] = self.n_basis
+        params["hidden_size"] = self.model[0].weight.shape[0]
+        params["n_layers"] = len(self.model)//2+1
+        params["activation"] = type(self.model[1])
+        params["method"] = self.method
+        params["data_type"] = self.data_type
+        params["data_precision"] = self.model[0].weight.dtype
+        params = {k: str(v) for k, v in params.items()}
+        return params
