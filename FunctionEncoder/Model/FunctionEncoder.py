@@ -1,24 +1,24 @@
+from typing import Union
 import torch
 from tqdm import trange
+from torch.utils.tensorboard import SummaryWriter
 
 from FunctionEncoder.Callbacks.BaseCallback import BaseCallback
 from FunctionEncoder.Dataset.BaseDataset import BaseDataset
-from torch.utils.tensorboard import SummaryWriter
-
-from FunctionEncoder.Model.ModelHelpers import build_model
+from FunctionEncoder.Model.Architecture.Euclidean import Euclidean
+from FunctionEncoder.Model.Architecture.MLP import MLP
 
 
 class FunctionEncoder(torch.nn.Module):
 
 
     def __init__(self,
-                 input_size,
-                 output_size,
-                 data_type,
-                 n_basis=100,
-                 hidden_size=256,
-                 n_layers=4,
-                 activation:str="relu",
+                 input_size:tuple[int],
+                 output_size:tuple[int],
+                 data_type:str,
+                 n_basis:int=100,
+                 model_type:str="MLP", # see the types and kwargs in FunctionEncoder/Model/Architecture
+                 model_kwargs:Union[dict, type(None)]=dict(),
                  method:str="least_squares",
                  ):
         assert len(input_size) == 1, "Only 1D input supported for now"
@@ -30,32 +30,30 @@ class FunctionEncoder(torch.nn.Module):
         self.input_size = input_size
         self.output_size = output_size
         self.n_basis = n_basis
-        self.model = build_model(self.input_size, self.output_size, self.n_basis, hidden_size, n_layers, activation)
-        self.opt = torch.optim.Adam(self.model.parameters(), lr=1e-3)
         self.method = method
         self.data_type = data_type
+        self.model = self._build(model_type, model_kwargs)
+        self.opt = torch.optim.Adam(self.model.parameters(), lr=1e-3)
+        self.model_type = model_type
+        self.model_kwargs = model_kwargs
+        self.total_epochs = 0
 
+    def _build(self, model_type, model_kwargs):
+        if model_type == "MLP":
+            return MLP(input_size=self.input_size,
+                       output_size=self.output_size,
+                       n_basis=self.n_basis,
+                       **model_kwargs)
+        elif model_type == "Euclidean":
+            return Euclidean(input_size=self.input_size,
+                             output_size=self.output_size,
+                             n_basis=self.n_basis,
+                             **model_kwargs)
+        else:
+            raise ValueError(f"Unknown model type: {model_type}")
 
     def forward(self, x):
-        assert x.shape[-1] == self.input_size[0], f"Expected input size {self.input_size[0]}, got {x.shape[-1]}"
-        reshape = None
-        if len(x.shape) == 1:
-            reshape = 1
-            x = x.reshape(1, 1, -1)
-        if len(x.shape) == 2:
-            reshape = 2
-            x = x.unsqueeze(0)
-
-        # this is the main part of this function. The rest is just error handling
-        outs = self.model(x)
-        Gs = outs.view(*x.shape[:2], *self.output_size, self.n_basis)
-
-        # send back to the given shape
-        if reshape == 1:
-            Gs = Gs.squeeze(0).squeeze(0)
-        if reshape == 2:
-            Gs = Gs.squeeze(0)
-        return Gs
+        return self.model.forward(x)
 
     def compute_representation(self, example_xs, example_ys, method="inner_product", **kwargs):
         assert example_xs.shape[-len(self.input_size):] == self.input_size, f"example_xs must have shape (..., {self.input_size}). Expected {self.input_size}, got {example_xs.shape[-len(self.input_size):]}"
@@ -185,6 +183,7 @@ class FunctionEncoder(torch.nn.Module):
         # method to use for representation during training
         assert self.method in ["inner_product", "least_squares"], f"Unknown method: {self.method}"
 
+        losses = []
         bar = trange(epochs) if progress_bar else range(epochs)
         for epoch in bar:
             example_xs, example_ys, xs, ys, _ = dataset.sample(device=device)
@@ -213,25 +212,26 @@ class FunctionEncoder(torch.nn.Module):
                 res = callback.on_step_begin(self)
                 if logdir is not None:
                     for k, v in res.items():
-                        writer.add_scalar(k, v, epoch)
+                        writer.add_scalar(k, v, self.total_epochs)
 
             # log
             if logdir is not None:
-                writer.add_scalar("train/prediction_loss", loss.item(), epoch)
-                writer.add_scalar("train/grad_norm", norm, epoch)
+                writer.add_scalar("train/prediction_loss", loss.item(), self.total_epochs)
+                writer.add_scalar("train/grad_norm", norm, self.total_epochs)
                 if self.method == "least_squares":
-                    writer.add_scalar("train/norm_loss", norm_loss.item(), epoch)
+                    writer.add_scalar("train/norm_loss", norm_loss.item(), self.total_epochs)
+            self.total_epochs += 1
+            losses.append(loss.item())
+        return losses
 
     def _param_string(self):
         params = {}
         params["input_size"] = self.input_size
         params["output_size"] = self.output_size
         params["n_basis"] = self.n_basis
-        params["hidden_size"] = self.model[0].weight.shape[0]
-        params["n_layers"] = len(self.model)//2+1
-        params["activation"] = type(self.model[1])
         params["method"] = self.method
-        params["data_type"] = self.data_type
-        params["data_precision"] = self.model[0].weight.dtype
+        params["model_type"] = self.model_type
+        for k, v in self.model_kwargs.items():
+            params[k] = v
         params = {k: str(v) for k, v in params.items()}
         return params
