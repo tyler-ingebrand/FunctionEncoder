@@ -12,7 +12,7 @@ Each of the following examples can be found in the Examples/ directory. These ex
 
 This algorithm can be applied to any Hilbert space. To visualize what this algorithm looks like, we can apply it to Euclidean vectors. Watch as the basis vectors (black) converge to the Hilbert space being fit (blue square).
 
-<video src='imgs/animation_2b.mp4' width=100%/>
+https://github.com/tyler-ingebrand/FunctionEncoder/assets/105821676/174ddf15-de2d-44dc-b7fe-6b5fad831a4b
 
 ### Quadratics
 
