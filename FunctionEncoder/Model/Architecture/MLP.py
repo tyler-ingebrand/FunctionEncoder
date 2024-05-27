@@ -56,7 +56,10 @@ class MLP(torch.nn.Module):
 
         # this is the main part of this function. The rest is just error handling
         outs = self.model(x)
-        Gs = outs.view(*x.shape[:2], *self.output_size, self.n_basis)
+        if self.n_basis > 1:
+            Gs = outs.view(*x.shape[:2], *self.output_size, self.n_basis)
+        else:
+            Gs = outs.view(*x.shape[:2], *self.output_size)
 
         # send back to the given shape
         if reshape == 1:

@@ -13,6 +13,7 @@ parser.add_argument("--train_method", type=str, default="least_squares")
 parser.add_argument("--epochs", type=int, default=10_000)
 parser.add_argument("--load_path", type=str, default=None)
 parser.add_argument("--seed", type=int, default=0)
+parser.add_argument("--residuals", action="store_true")
 args = parser.parse_args()
 
 # hyper params
@@ -22,6 +23,7 @@ device = "cuda"
 train_method = args.train_method
 seed = args.seed
 load_path = args.load_path
+residuals = args.residuals
 if load_path is None:
     logdir = f"logs/donut_example/{train_method}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
 else:
@@ -40,7 +42,8 @@ if load_path is None:
                             output_size=dataset.output_size,
                             data_type=dataset.data_type,
                             n_basis=n_basis,
-                            method=train_method).to(device)
+                            method=train_method,
+                            use_residuals_method=residuals).to(device)
 
     # create a testing callback
     callback = NLLCallback(dataset, device=device)
@@ -56,7 +59,8 @@ else:
                             output_size=dataset.output_size,
                             data_type=dataset.data_type,
                             n_basis=n_basis,
-                            method=train_method).to(device)
+                            method=train_method,
+                            use_residuals_method=residuals).to(device)
     model.load_state_dict(torch.load(f"{logdir}/model.pth"))
 
 

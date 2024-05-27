@@ -13,6 +13,7 @@ parser.add_argument("--train_method", type=str, default="least_squares")
 parser.add_argument("--epochs", type=int, default=10000)
 parser.add_argument("--load_path", type=str, default=None)
 parser.add_argument("--seed", type=int, default=0)
+parser.add_argument("--residuals", action="store_true")
 args = parser.parse_args()
 
 # hyper params
@@ -22,6 +23,7 @@ device = "cuda"
 train_method = args.train_method
 seed = args.seed
 load_path = args.load_path
+residuals = args.residuals
 if load_path is None:
     logdir = f"logs/gaussian_example/{train_method}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
 else:
@@ -39,7 +41,8 @@ if load_path is None:
                             output_size=dataset.output_size,
                             data_type=dataset.data_type,
                             n_basis=n_basis,
-                            method=train_method).to(device)
+                            method=train_method,
+                            use_residuals_method=residuals).to(device)
 
     # create a testing callback
     callback = NLLCallback(dataset, device=device)
@@ -51,7 +54,11 @@ if load_path is None:
     torch.save(model.state_dict(), f"{logdir}/model.pth")
 else:
     # load the model
-    model = FunctionEncoder(input_size=(2,), output_size=(1,), n_basis=n_basis, method=train_method).to(device)
+    model = FunctionEncoder(input_size=dataset.input_size,
+                            output_size=dataset.output_size,
+                            n_basis=n_basis, 
+                            method=train_method,
+                            use_residuals_method=residuals).to(device)
     model.load_state_dict(torch.load(f"{logdir}/model.pth"))
 
 
@@ -89,7 +96,7 @@ with torch.no_grad():
         ax = axes[i ]
         ax.contourf(grid, grid, pdf[i], levels=100, cmap="Reds", )
         ax.scatter(example_xs[i, :example_xs.shape[1]//2, 0].cpu(), example_xs[i, :example_xs.shape[1]//2, 1].cpu(), color="black", s=1, alpha=0.5)
-        ax.scatter(example_xs[i, example_xs.shape[1]//2:, 0].cpu(), example_xs[i, example_xs.shape[1]//2:, 1].cpu(), color="blue", s=1, alpha=0.5)
+        # ax.scatter(example_xs[i, example_xs.shape[1]//2:, 0].cpu(), example_xs[i, example_xs.shape[1]//2:, 1].cpu(), color="blue", s=1, alpha=0.5)
 
         ax.set_xlim(-1, 1)
         ax.set_ylim(-1, 1)

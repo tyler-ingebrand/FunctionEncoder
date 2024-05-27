@@ -27,10 +27,10 @@ class GaussianDataset(BaseDataset):
         self.noise_max = 0.35
 
 
-    def sample(self, device:Union[str, torch.device]) -> Tuple[ Union[torch.tensor, type(None)],
-                                                                Union[torch.tensor, type(None)],
-                                                                Union[torch.tensor, type(None)],
-                                                                Union[torch.tensor, type(None)],
+    def sample(self, device:Union[str, torch.device]) -> Tuple[ torch.tensor, 
+                                                                torch.tensor, 
+                                                                torch.tensor, 
+                                                                torch.tensor, 
                                                                 dict]:
         # sample radiuses
         std_devs = torch.rand(self.n_functions_per_sample) * (self.noise_max - self.noise_min) + self.noise_min

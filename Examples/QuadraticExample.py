@@ -15,6 +15,7 @@ parser.add_argument("--train_method", type=str, default="least_squares")
 parser.add_argument("--epochs", type=int, default=1_000)
 parser.add_argument("--load_path", type=str, default=None)
 parser.add_argument("--seed", type=int, default=0)
+parser.add_argument("--residuals", action="store_true")
 args = parser.parse_args()
 
 
@@ -25,6 +26,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 train_method = args.train_method
 seed = args.seed
 load_path = args.load_path
+residuals = args.residuals
 if load_path is None:
     logdir = f"logs/quadratic_example/{train_method}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
 else:
@@ -34,7 +36,10 @@ else:
 torch.manual_seed(seed)
 
 # create a dataset
-a_range = (-3, 3)
+if residuals:
+    a_range = (0, 3) # this makes the true average function non-zero
+else:
+    a_range = (-3, 3)
 b_range = (-3, 3)
 c_range = (-3, 3)
 input_range = (-10, 10)
@@ -46,7 +51,8 @@ if load_path is None:
                             output_size=dataset.output_size,
                             data_type=dataset.data_type,
                             n_basis=n_basis,
-                            method=train_method).to(device)
+                            method=train_method,
+                            use_residuals_method=residuals).to(device)
 
     # create a testing callback
     callback = MSECallback(dataset, device=device)
@@ -62,7 +68,8 @@ else:
                             output_size=dataset.output_size,
                             data_type=dataset.data_type,
                             n_basis=n_basis,
-                            method=train_method).to(device)
+                            method=train_method,
+                            use_residuals_method=residuals).to(device)
     model.load_state_dict(torch.load(f"{logdir}/model.pth"))
 
 # plot
@@ -101,9 +108,13 @@ with torch.no_grad():
     # plot the basis functions
     fig, ax = plt.subplots(1, 1, figsize=(15, 10))
     xs = torch.linspace(input_range[0], input_range[1], 1_000).reshape(1000, 1).to(device)
-    basis = model.forward(xs)
+    basis = model.model.forward(xs)
     for i in range(n_basis):
-        ax.plot(xs.flatten().cpu(), basis[:, 0, i].cpu())
+        ax.plot(xs.flatten().cpu(), basis[:, 0, i].cpu(), color="black")
+    if residuals:
+        avg_function = model.average_function.forward(xs)
+        ax.plot(xs.flatten().cpu(), avg_function.flatten().cpu(), color="blue")
+
     plt.tight_layout()
     plt.savefig(f"{logdir}/basis.png")
 

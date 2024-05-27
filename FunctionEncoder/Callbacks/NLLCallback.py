@@ -11,7 +11,7 @@ class NLLCallback(BaseCallback):
         self.testing_dataset = testing_dataset
         self.device = device
 
-    def on_step_begin(self, function_encoder:FunctionEncoder) -> dict:
+    def on_step(self, function_encoder:FunctionEncoder) -> dict:
         with torch.no_grad():
             # sample testing data
             example_xs, example_ys, xs, ys, info = self.testing_dataset.sample(device=self.device)

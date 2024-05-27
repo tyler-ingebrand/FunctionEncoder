@@ -27,10 +27,10 @@ class GaussianDonutDataset(BaseDataset):
         self.volume = (self.highs - self.lows).prod()
 
 
-    def sample(self, device:Union[str, torch.device]) -> Tuple[ Union[torch.tensor, type(None)],
-                                                                Union[torch.tensor, type(None)],
-                                                                Union[torch.tensor, type(None)],
-                                                                Union[torch.tensor, type(None)],
+    def sample(self, device:Union[str, torch.device]) -> Tuple[ torch.tensor, 
+                                                                torch.tensor, 
+                                                                torch.tensor, 
+                                                                torch.tensor,
                                                                 dict]:
         # sample radiuses
         radii = torch.rand((self.n_functions_per_sample, 1), device=device) * self.radius

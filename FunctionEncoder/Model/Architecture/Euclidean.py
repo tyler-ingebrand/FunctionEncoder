@@ -1,5 +1,5 @@
 import torch
-
+import warnings
 
 
 class Euclidean(torch.nn.Module):
@@ -13,6 +13,8 @@ class Euclidean(torch.nn.Module):
         super(Euclidean, self).__init__()
         assert input_size[0] == 1, "Euclidean vectors have no inputs, so we use 1 for consistency with NN"
         assert len(output_size) == 1, "Euclidean vectors have a single dimension, where the size of the dimension is the dimensionality of the space."
+        warnings.warn("'Euclidean' class is designed just to visualize the algorithm, it is not meant to be used in practice. \
+                      Make sure you know what you are doing before using this. If you are running the EuclideanExample, you are good to go.")
         self.input_size = input_size
         self.output_size = output_size
         self.n_basis = n_basis

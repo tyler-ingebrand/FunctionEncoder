@@ -28,10 +28,10 @@ class EuclideanDataset(BaseDataset):
         self.min = torch.tensor([-1, -1, 0])
         self.max = torch.tensor([1, 1, 0])
 
-    def sample(self, device: Union[str, torch.device]) -> Tuple[Union[torch.tensor, type(None)],
-                                                                Union[torch.tensor, type(None)],
-                                                                Union[torch.tensor, type(None)],
-                                                                Union[torch.tensor, type(None)],
+    def sample(self, device: Union[str, torch.device]) -> Tuple[torch.tensor, 
+                                                                torch.tensor, 
+                                                                torch.tensor, 
+                                                                torch.tensor, 
                                                                 dict]:
         # these are unused, except for the size
         example_xs = torch.zeros(self.n_functions_per_sample, self.n_examples_per_sample, *self.input_size)
