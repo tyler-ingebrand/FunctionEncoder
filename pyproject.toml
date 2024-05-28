@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 #where = ["."]  # list of folders that contain the packages (["."] by default)
 #include = ["FunctionEncoder"]  # package names should match these glob patterns (["*"] by default)
-exclude = ["Examples", "imgs]  # exclude packages matching these glob patterns (empty by default)
+exclude = ["Examples", "imgs"]  # exclude packages matching these glob patterns (empty by default)
 #namespaces = false  # to disable scanning PEP 420 namespaces (true by default)
 
 [project]
