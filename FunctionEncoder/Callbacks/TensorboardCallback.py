@@ -10,8 +10,7 @@ class TensorboardCallback(BaseCallback):
     def __init__(self,
                  logdir:Union[str, None]=None,
                  tensorboard:Union[None, SummaryWriter]=None,
-                 prefix="train",
-                 testing_callback=None):
+                 prefix="train"):
         """ Constructor for TensorboardCallback. Either logdir  or tensorboard must be provided, but not both"""
         assert logdir is not None or tensorboard is not None, "Either logdir or tensorboard must be provided"
         assert logdir is None or tensorboard is None, "Only one of logdir or tensorboard can be provided"

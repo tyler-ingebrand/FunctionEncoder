@@ -29,3 +29,7 @@ class ListCallback(BaseCallback):
         """
         for callback in self.callbacks:
             callback.on_training_end(locals)
+
+    def __getitem__(self, key):
+        assert type(key) == int, "Key must be an integer"
+        return self.callbacks[key]
