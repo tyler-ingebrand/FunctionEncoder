@@ -1,3 +1,4 @@
+from typing import Any
 
 
 class BaseCallback:
@@ -6,13 +7,26 @@ class BaseCallback:
         """ Constructor for BaseCallback"""
         pass
 
-    def on_step(self, function_encoder) -> dict:
+    def on_training_start(self, locals: dict) -> None:
+        """ Called at the start of training.
+
+        Args:
+        locals (dict): A dictionary of local variables.
+        """
+        pass
+
+    def on_step(self, locals: dict) -> None:
         """ Called at the end of each training step. 
 
         Args:
-        function_encoder (FunctionEncoder): The function encoder that is being trained.
+        locals (dict): A dictionary of local variables.
+        """
+        pass
 
-        Returns:
-        dict: A dictionary of information to log. 
+    def on_training_end(self, locals: dict) -> None:
+        """ Called at the end of training.
+
+        Args:
+        locals (dict): A dictionary of local variables.
         """
         pass

@@ -11,6 +11,38 @@ from FunctionEncoder import  EuclideanDataset, FunctionEncoder, MSECallback
 
 import argparse
 
+from typing import Union
+
+import torch
+from torch.utils.tensorboard import SummaryWriter
+
+from FunctionEncoder import FunctionEncoder, BaseDataset
+from FunctionEncoder.Callbacks.BaseCallback import BaseCallback
+
+
+# this class just computes mse and stores it in a list.
+# This is not generally advised, as tensorboard is better, but we just want it for plotting a video.
+class ListMSECallback(BaseCallback):
+
+    def __init__(self,
+                 testing_dataset:BaseDataset,
+                 device:Union[str, torch.device],
+                 ):
+        super(ListMSECallback, self).__init__()
+        self.testing_dataset = testing_dataset
+        self.device = device
+        self.losses = []
+
+    def on_step(self, locals:dict):
+        with torch.no_grad():
+            function_encoder = locals["self"]
+            example_xs, example_ys, xs, ys, info = self.testing_dataset.sample(device=self.device)
+            y_hats = function_encoder.predict_from_examples(example_xs, example_ys, xs, method="least_squares")
+            loss = torch.mean((ys - y_hats) ** 2).item()
+            self.losses.append(loss)
+
+
+
 
 def to_numpy(x):
     return x.detach().cpu().numpy()
@@ -39,6 +71,9 @@ torch.manual_seed(seed)
 # create a dataset
 dataset = EuclideanDataset()
 
+# cb
+callback = ListMSECallback(dataset, device=device)
+
 # create the model
 model = FunctionEncoder(input_size=dataset.input_size,
                         output_size=dataset.output_size,
@@ -46,9 +81,6 @@ model = FunctionEncoder(input_size=dataset.input_size,
                         n_basis=n_basis,
                         method=train_method,
                         model_type="Euclidean",).to(device)
-
-# create a testing callback
-callback = MSECallback(dataset, device=device)
 
 
 # we are going to plot a video
@@ -65,7 +97,6 @@ ax2.set_aspect(epochs / 10)
 fig.tight_layout()
 fig.subplots_adjust(wspace=-0.10)
 
-losses = []
 tbar = trange(epochs + 1)
 def update(frame):
     tbar.update(1)
@@ -73,9 +104,9 @@ def update(frame):
     ax2.cla()
 
     # do a single gradient step
-    l = model.train_model(dataset, epochs=1, logdir=None, callback=callback, progress_bar=False)
+    model.train_model(dataset, epochs=1, callback=callback, progress_bar=False)
     g = model.model.basis
-    losses.append(l[0])
+    losses = callback.losses
 
     # plot the space we are fitting, ie the xy plane
     rect = Poly3DCollection([[(dataset.min[0], dataset.min[1], dataset.min[2]),

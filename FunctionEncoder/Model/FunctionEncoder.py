@@ -71,9 +71,7 @@ class FunctionEncoder(torch.nn.Module):
         # for printing
         self.model_type = model_type
         self.model_kwargs = model_kwargs
-        
-        # to make graphs pretty
-        self.total_epochs = 0
+
 
     def _build(self, 
                model_type:str, 
@@ -408,15 +406,13 @@ class FunctionEncoder(torch.nn.Module):
     def train_model(self,
                     dataset: BaseDataset,
                     epochs: int,
-                    logdir=None,
                     progress_bar=True,
-                    callback:BaseCallback=None) -> list[float]:
+                    callback:BaseCallback=None):
         """ Trains the function encoder on the dataset for some number of epochs.
         
         Args:
         dataset: BaseDataset: The dataset to train on.
         epochs: int: The number of epochs to train for.
-        logdir: Union[str, None]: The directory to log to. If None, does not log.
         progress_bar: bool: Whether to show a progress bar.
         callback: BaseCallback: A callback to use during training. Can be used to test loss, etc. 
         
@@ -429,12 +425,9 @@ class FunctionEncoder(torch.nn.Module):
         # set device
         device = next(self.parameters()).device
 
-        # if logdir is provided, use tensorboard
-        if logdir is not None:
-            writer = SummaryWriter(logdir)
-            params = self._param_string()
-            for key, value in params.items():
-                writer.add_text(key, value, 0)
+        # Let callbacks few starting data
+        if callback is not None:
+            callback.on_training_start(locals())
 
         # method to use for representation during training
         assert self.method in ["inner_product", "least_squares"], f"Unknown method: {self.method}"
@@ -485,24 +478,11 @@ class FunctionEncoder(torch.nn.Module):
 
             # callbacks
             if callback is not None:
-                res = callback.on_step(self)
-                if logdir is not None:
-                    for k, v in res.items():
-                        writer.add_scalar(k, v, self.total_epochs)
+                callback.on_step(locals())
 
-            # logs
-            if logdir is not None:
-                writer.add_scalar("train/prediction_loss", loss.item(), self.total_epochs)
-                writer.add_scalar("train/grad_norm", norm, self.total_epochs)
-                if self.method == "least_squares":
-                    writer.add_scalar("train/norm_loss", norm_loss.item(), self.total_epochs)
-                if self.average_function is not None:
-                    writer.add_scalar("train/average_function_loss", loss.item(), self.total_epochs)
-            
-            # update stats
-            self.total_epochs += 1
-            losses.append(loss.item())
-        return losses
+        # let callbacks know its done
+        if callback is not None:
+            callback.on_training_end(locals())
 
     def _param_string(self):
         """ Returns a dictionary of hyperparameters for logging."""

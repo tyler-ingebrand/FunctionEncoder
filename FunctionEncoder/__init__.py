@@ -10,6 +10,8 @@ from FunctionEncoder.Dataset.EuclideanDataset import EuclideanDataset
 from FunctionEncoder.Callbacks.BaseCallback import BaseCallback
 from FunctionEncoder.Callbacks.MSECallback import MSECallback
 from FunctionEncoder.Callbacks.NLLCallback import NLLCallback
+from FunctionEncoder.Callbacks.ListCallback import ListCallback
+from FunctionEncoder.Callbacks.TensorboardCallback import TensorboardCallback
 
 __all__ = [
     "FunctionEncoder",
@@ -22,6 +24,8 @@ __all__ = [
 
     "BaseCallback",
     "MSECallback",
-    "NLLCallback"
+    "NLLCallback",
+    "ListCallback",
+    "TensorboardCallback",
 
 ]

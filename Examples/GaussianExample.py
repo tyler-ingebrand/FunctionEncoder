@@ -4,7 +4,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import torch
 
-from FunctionEncoder import  FunctionEncoder, NLLCallback, GaussianDataset
+from FunctionEncoder import FunctionEncoder, NLLCallback, GaussianDataset, TensorboardCallback, ListCallback
 
 # parse args
 parser = argparse.ArgumentParser()
@@ -44,11 +44,13 @@ if load_path is None:
                             method=train_method,
                             use_residuals_method=residuals).to(device)
 
-    # create a testing callback
-    callback = NLLCallback(dataset, device=device)
+    # create callbacks
+    cb1 = TensorboardCallback(logdir) # this one logs training data
+    cb2 = NLLCallback(dataset, device=device, tensorboard=cb1.tensorboard) # this one tests and logs the results
+    callback = ListCallback([cb1, cb2])
 
     # train the model
-    model.train_model(dataset, epochs=epochs, logdir=logdir, callback=callback)
+    model.train_model(dataset, epochs=epochs, callback=callback)
 
     # save the model
     torch.save(model.state_dict(), f"{logdir}/model.pth")
