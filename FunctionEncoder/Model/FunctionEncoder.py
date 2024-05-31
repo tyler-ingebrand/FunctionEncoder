@@ -324,6 +324,7 @@ class FunctionEncoder(torch.nn.Module):
         assert Gs.shape[1] == example_ys.shape[1], f"Expected Gs and example_ys to have the same number of datapoints, got {Gs.shape[1]} and {example_ys.shape[1]}"
         assert Gs.shape[2] == example_ys.shape[2], f"Expected Gs and example_ys to have the same output size, got {Gs.shape[2]} and {example_ys.shape[2]}"
         assert lambd >= 0, f"Expected lambda to be non-negative, got {lambd}"
+        lambd = 1/(Gs.shape[1])
 
         # compute gram
         gram = self._inner_product(Gs, Gs)
