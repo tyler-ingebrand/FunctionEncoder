@@ -97,7 +97,7 @@ with torch.no_grad():
         ax = axes[i ]
         ax.contourf(grid, grid, pdf[i], levels=100, cmap="Reds", )
         ax.scatter(example_xs[i, :example_xs.shape[1]//2, 0].cpu(), example_xs[i, :example_xs.shape[1]//2, 1].cpu(), color="black", s=1, alpha=0.5)
-        circle = plt.Circle((0, 0), radii[i], color='b', fill=False)
+        circle = plt.Circle((0, 0), radii[i].cpu(), color='b', fill=False)
         ax.add_artist(circle)
 
         ax.set_xlim(-1, 1)

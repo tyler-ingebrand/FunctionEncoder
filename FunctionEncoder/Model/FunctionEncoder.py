@@ -279,6 +279,28 @@ class FunctionEncoder(torch.nn.Module):
         else:
             raise ValueError(f"Unknown data type: '{self.data_type}'. Should be 'deterministic' or 'stochastic'")
 
+    def _norm(self, fs:torch.tensor) -> torch.tensor:
+        """ Computes the norm of fs according to the chosen inner product.
+
+        Args:
+        fs: torch.tensor: The function outputs. Shape can vary, but typically (n_functions, n_datapoints, input_size)
+
+        Returns:
+        torch.tensor: The Hilbert norm of fs.
+        """
+        return self._inner_product(fs, fs).sqrt()
+
+    def _distance(self, fs:torch.tensor, gs:torch.tensor) -> torch.tensor:
+        """ Computes the distance between fs and gs according to the chosen inner product.
+
+        Args:
+        fs: torch.tensor: The first set of function outputs. Shape can vary, but typically (n_functions, n_datapoints, input_size)
+        gs: torch.tensor: The second set of function outputs. Shape can vary, but typically (n_functions, n_datapoints, input_size)
+        returns:
+        torch.tensor: The distance between fs and gs.
+        """
+        return self._norm(fs - gs)
+
     def _compute_inner_product_representation(self, 
                                               Gs:torch.tensor, 
                                               example_ys:torch.tensor) -> torch.tensor:
@@ -444,8 +466,7 @@ class FunctionEncoder(torch.nn.Module):
                 expected_yhats = self.average_function.forward(xs)
 
                 # compute average function loss
-                errors = expected_yhats - ys   
-                average_function_loss = self._inner_product(errors, errors).mean()
+                average_function_loss = self._distance(expected_yhats, ys).square().mean()
                 
                 # we only train average function to fit data in general, so block backprop from the basis function loss
                 expected_yhats = expected_yhats.detach()
@@ -455,8 +476,7 @@ class FunctionEncoder(torch.nn.Module):
             # approximate functions, compute error
             representation, gram = self.compute_representation(example_xs, example_ys, method=self.method)
             y_hats = self.predict(xs, representation, precomputed_average_ys=expected_yhats)
-            error_vector = y_hats - ys
-            prediction_loss = self._inner_product(error_vector, error_vector).mean()
+            prediction_loss = self._distance(y_hats, ys).square().mean()
 
             # LS requires regularization since it does not care about the scale of basis
             # so we force basis to move towards unit norm. They dont actually need to be unit, but this prevents them
