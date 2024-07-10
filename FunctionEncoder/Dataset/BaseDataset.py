@@ -35,7 +35,7 @@ class BaseDataset:
         assert len(output_size) >= 1, "output_size must be a tuple of at least one element"
         assert total_n_functions >= 1, "n_functions must be a positive integer or infinite"
         assert total_n_samples_per_function >= 1, "n_samples_per_function must be a positive integer or infinite"
-        assert data_type in ["deterministic", "stochastic"]
+        assert data_type in ["deterministic", "stochastic", "categorical"]
         self.input_size = input_size
         self.output_size = output_size
         self.n_functions = total_n_functions # may be infinite

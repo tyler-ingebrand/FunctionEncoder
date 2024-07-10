@@ -17,3 +17,6 @@ python Examples/GaussianExample.py --train_method inner_product --epochs 1000 --
  
 python Examples/EuclideanExample.py --epochs 1000 --n_basis 2
 python Examples/EuclideanExample.py --epochs 1000 --n_basis 3
+
+python Examples/CategoricalExample.py --train_method inner_product --epochs 10000
+python Examples/CategoricalExample.py --train_method least_squares --epochs 10000

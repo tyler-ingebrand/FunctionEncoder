@@ -37,7 +37,7 @@ class ListMSECallback(BaseCallback):
         with torch.no_grad():
             function_encoder = locals["self"]
             example_xs, example_ys, xs, ys, info = self.testing_dataset.sample(device=self.device)
-            y_hats = function_encoder.predict_from_examples(example_xs, example_ys, xs, method="least_squares")
+            y_hats = function_encoder.predict_from_examples(example_xs, example_ys, xs, method=function_encoder.method, lambd=0.0)
             loss = torch.mean((ys - y_hats) ** 2).item()
             self.losses.append(loss)
 

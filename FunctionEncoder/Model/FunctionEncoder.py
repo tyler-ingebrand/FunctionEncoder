@@ -50,7 +50,7 @@ class FunctionEncoder(torch.nn.Module):
         assert input_size[0] >= 1, "Input size must be at least 1"
         assert len(output_size) == 1, "Only 1D output supported for now"
         assert output_size[0] >= 1, "Output size must be at least 1"
-        assert data_type in ["deterministic", "stochastic"], f"Unknown data type: {data_type}"
+        assert data_type in ["deterministic", "stochastic", "categorical"], f"Unknown data type: {data_type}"
         super(FunctionEncoder, self).__init__()
         
         # hyperparameters
@@ -223,8 +223,7 @@ class FunctionEncoder(torch.nn.Module):
         assert fs.shape[0] == gs.shape[0], f"Expected fs and gs to have the same number of functions, got {fs.shape[0]} and {gs.shape[0]}"
         assert fs.shape[1] == gs.shape[1], f"Expected fs and gs to have the same number of datapoints, got {fs.shape[1]} and {gs.shape[1]}"
         assert fs.shape[2] == gs.shape[2] == 1, f"Expected fs and gs to have the same output size, which is 1 for the stochastic case since it learns the pdf(x), got {fs.shape[2]} and {gs.shape[2]}"
-        
-        
+
         # reshaping
         unsqueezed_fs, unsqueezed_gs = False, False
         if len(fs.shape) == 3:
@@ -243,8 +242,54 @@ class FunctionEncoder(torch.nn.Module):
 
         # compute inner products
         element_wise_inner_products = torch.einsum("fdmk,fdml->fdkl", fs, gs)
-        inner_product = torch.mean(element_wise_inner_products, dim=1) # sum or mean??
+        inner_product = torch.mean(element_wise_inner_products, dim=1)
         # Technically we should multiply by volume, but we are assuming that the volume is 1 since it is often not known
+
+        # undo reshaping
+        if unsqueezed_fs:
+            inner_product = inner_product.squeeze(-2)
+        if unsqueezed_gs:
+            inner_product = inner_product.squeeze(-1)
+        return inner_product
+
+    def _categorical_inner_product(self,
+                                   fs:torch.tensor,
+                                   gs:torch.tensor,) -> torch.tensor:
+        """ Approximates the inner product between discrete conditional probability distributions.
+
+        Args:
+        fs: torch.tensor: The first set of function outputs. Shape (n_functions, n_datapoints, n_categories, n_basis1)
+        gs: torch.tensor: The second set of function outputs. Shape (n_functions, n_datapoints, n_categories, n_basis2)
+
+        Returns:
+        torch.tensor: The inner product between fs and gs. Shape (n_functions, n_basis1, n_basis2)
+        """
+        
+        assert len(fs.shape) in [3, 4], f"Expected fs to have shape (f,d,m) or (f,d,m,k), got {fs.shape}"
+        assert len(gs.shape) in [3, 4], f"Expected gs to have shape (f,d,m) or (f,d,m,k), got {gs.shape}"
+        assert fs.shape[0] == gs.shape[0], f"Expected fs and gs to have the same number of functions, got {fs.shape[0]} and {gs.shape[0]}"
+        assert fs.shape[1] == gs.shape[1], f"Expected fs and gs to have the same number of datapoints, got {fs.shape[1]} and {gs.shape[1]}"
+        assert fs.shape[2] == gs.shape[2], f"Expected fs and gs to have the same output size, which is the number of categories in this case, got {fs.shape[2]} and {gs.shape[2]}"
+
+        # reshaping
+        unsqueezed_fs, unsqueezed_gs = False, False
+        if len(fs.shape) == 3:
+            fs = fs.unsqueeze(-1)
+            unsqueezed_fs = True
+        if len(gs.shape) == 3:
+            gs = gs.unsqueeze(-1)
+            unsqueezed_gs = True
+        assert len(fs.shape) == 4 and len(gs.shape) == 4, "Expected fs and gs to have shape (f,d,m,k)"
+
+        # compute means and subtract them
+        mean_f = torch.mean(fs, dim=2, keepdim=True)
+        mean_g = torch.mean(gs, dim=2, keepdim=True)
+        fs = fs - mean_f
+        gs = gs - mean_g
+
+        # compute inner products
+        element_wise_inner_products = torch.einsum("fdmk,fdml->fdkl", fs, gs)
+        inner_product = torch.mean(element_wise_inner_products, dim=1)
 
         # undo reshaping
         if unsqueezed_fs:
@@ -276,10 +321,12 @@ class FunctionEncoder(torch.nn.Module):
             return self._deterministic_inner_product(fs, gs)
         elif self.data_type == "stochastic":
             return self._stochastic_inner_product(fs, gs)
+        elif self.data_type == "categorical":
+            return self._categorical_inner_product(fs, gs)
         else:
-            raise ValueError(f"Unknown data type: '{self.data_type}'. Should be 'deterministic' or 'stochastic'")
+            raise ValueError(f"Unknown data type: '{self.data_type}'. Should be 'deterministic', 'stochastic', or 'categorical'")
 
-    def _norm(self, fs:torch.tensor) -> torch.tensor:
+    def _norm(self, fs:torch.tensor, squared=False) -> torch.tensor:
         """ Computes the norm of fs according to the chosen inner product.
 
         Args:
@@ -288,9 +335,13 @@ class FunctionEncoder(torch.nn.Module):
         Returns:
         torch.tensor: The Hilbert norm of fs.
         """
-        return self._inner_product(fs, fs).sqrt()
+        norm_squared = self._inner_product(fs, fs)
+        if not squared:
+            return norm_squared.sqrt()
+        else:
+            return norm_squared
 
-    def _distance(self, fs:torch.tensor, gs:torch.tensor) -> torch.tensor:
+    def _distance(self, fs:torch.tensor, gs:torch.tensor, squared=False) -> torch.tensor:
         """ Computes the distance between fs and gs according to the chosen inner product.
 
         Args:
@@ -299,7 +350,7 @@ class FunctionEncoder(torch.nn.Module):
         returns:
         torch.tensor: The distance between fs and gs.
         """
-        return self._norm(fs - gs)
+        return self._norm(fs - gs, squared=squared)
 
     def _compute_inner_product_representation(self, 
                                               Gs:torch.tensor, 
@@ -327,13 +378,13 @@ class FunctionEncoder(torch.nn.Module):
     def _compute_least_squares_representation(self, 
                                               Gs:torch.tensor, 
                                               example_ys:torch.tensor, 
-                                              lambd:float=0.1) -> Tuple[torch.tensor, torch.tensor]:
+                                              lambd:Union[float, type(None)]= None) -> Tuple[torch.tensor, torch.tensor]:
         """ Computes the coefficients via the least squares method.
         
         Args:
         Gs: torch.tensor: The basis functions. Shape (n_functions, n_datapoints, output_size, n_basis)
         example_ys: torch.tensor: The output data. Shape (n_functions, n_datapoints, output_size)
-        lambd: float: The regularization parameter.
+        lambd: float: The regularization parameter. None by default. If None, scales with 1/n_datapoints.
         
         Returns:
         torch.tensor: The coefficients of the basis functions. Shape (n_functions, n_basis)
@@ -345,8 +396,11 @@ class FunctionEncoder(torch.nn.Module):
         assert Gs.shape[0] == example_ys.shape[0], f"Expected Gs and example_ys to have the same number of functions, got {Gs.shape[0]} and {example_ys.shape[0]}"
         assert Gs.shape[1] == example_ys.shape[1], f"Expected Gs and example_ys to have the same number of datapoints, got {Gs.shape[1]} and {example_ys.shape[1]}"
         assert Gs.shape[2] == example_ys.shape[2], f"Expected Gs and example_ys to have the same output size, got {Gs.shape[2]} and {example_ys.shape[2]}"
-        assert lambd >= 0, f"Expected lambda to be non-negative, got {lambd}"
-        lambd = 1/(Gs.shape[1])
+        assert lambd is None or lambd >= 0, f"Expected lambda to be non-negative or None, got {lambd}"
+
+        # set lambd to decrease with more data
+        if lambd is None:
+            lambd = 1/(Gs.shape[1])
 
         # compute gram
         gram = self._inner_product(Gs, Gs)
@@ -466,7 +520,7 @@ class FunctionEncoder(torch.nn.Module):
                 expected_yhats = self.average_function.forward(xs)
 
                 # compute average function loss
-                average_function_loss = self._distance(expected_yhats, ys).square().mean()
+                average_function_loss = self._distance(expected_yhats, ys, squared=True).mean()
                 
                 # we only train average function to fit data in general, so block backprop from the basis function loss
                 expected_yhats = expected_yhats.detach()
@@ -476,7 +530,7 @@ class FunctionEncoder(torch.nn.Module):
             # approximate functions, compute error
             representation, gram = self.compute_representation(example_xs, example_ys, method=self.method)
             y_hats = self.predict(xs, representation, precomputed_average_ys=expected_yhats)
-            prediction_loss = self._distance(y_hats, ys).square().mean()
+            prediction_loss = self._distance(y_hats, ys, squared=True).mean()
 
             # LS requires regularization since it does not care about the scale of basis
             # so we force basis to move towards unit norm. They dont actually need to be unit, but this prevents them
