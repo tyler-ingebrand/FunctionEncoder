@@ -4,6 +4,17 @@ A function encoder learns basis functions/vectors over arbitrary Hilbert spaces.
 
 See [the original paper](https://arxiv.org/abs/2401.17173) for a mathematical introduction or [the blog](https://tyler-ingebrand.github.io/2024/05/04/zero-shot-RL.html) for an intuitive explanation of function encoders. 
 
+## Installation
+For the latest stable release:
+```commandline
+pip install FunctionEncoder
+```
+For the latest version:
+```commandline
+pip install git+https://github.com/tyler-ingebrand/FunctionEncoder.git
+```
+
+
 ## Examples
 
 Each of the following examples can be found in the Examples/ directory. These examples illustrate the basis use of this repo and algorithm, but are by no means the extent of its applications or scalability. 
