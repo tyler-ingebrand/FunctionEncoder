@@ -24,11 +24,11 @@ class BaseDataset:
         input_size (Tuple[int]): Size of input to the function space, IE the number of dimensions of the input
         output_size (Tuple[int]): Size of output of the function space, IE the number of dimensions of the output
         total_n_functions (Union[int, float]): Number of functions in this dataset. If functions are sampled from a continuous space, this can be float('inf')
-        total_n_samples_per_function (Union[int, float]): Number of samples per function. If functions are sampled from a continuous space, this can be float('inf')
+        total_n_samples_per_function (Union[int, float]): Number of data points per function. If data is sampled from a continuous space, this can be float('inf')
         data_type (str): Type of data. Options are "deterministic" or "stochastic". Affects which inner product method is used. 
         n_functions_per_sample (int): Number of functions per training step. Should be at least 5 or so.
-        n_examples_per_sample (int): Number of examples per function per training step. This data is used by the function encoder to compute coefficients.
-        n_points_per_sample (int): Number of points per example per training step. Should be large enough to capture the function's behavior. These points are used to train the function encoder.
+        n_examples_per_sample (int): Number of example points per function per training step. This data is used by the function encoder to compute coefficients.
+        n_points_per_sample (int): Number of target points per function per training step. Should be large enough to capture the function's behavior. These points are used to train the function encoder as the target of the prediction, ie the MSE.
 
         """
         assert len(input_size) >= 1, "input_size must be a tuple of at least one element"
