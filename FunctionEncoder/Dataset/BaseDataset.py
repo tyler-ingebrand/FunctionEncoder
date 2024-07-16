@@ -64,18 +64,20 @@ class BaseDataset:
         """
         pass
 
-def check_dataset(dataset:BaseDataset):
-    """ Verify that a dataset is correctly implemented. Throws error if violated. """
-    out = dataset.sample("cpu")
-    assert len(out) == 5, f"Expected 5 outputs, got {len(out)}"
-    
-    example_xs, example_ys, xs, ys, info = out
-    assert type(example_xs) == torch.Tensor, f"Expected example_xs to be a torch.Tensor, got {type(example_xs)}"
-    assert type(example_ys) == torch.Tensor, f"Expected example_ys to be a torch.Tensor, got {type(example_ys)}"
-    assert type(xs) == torch.Tensor, f"Expected xs to be a torch.Tensor, got {type(xs)}"
-    assert type(ys) == torch.Tensor, f"Expected ys to be a torch.Tensor, got {type(ys)}"
-    assert example_xs.shape == (dataset.n_functions_per_sample, dataset.n_examples_per_sample, *dataset.input_size), f"Expected example_xs shape to be {(dataset.n_functions_per_sample, dataset.n_examples_per_sample, *dataset.input_size)}, got {example_xs.shape}"
-    assert example_ys.shape == (dataset.n_functions_per_sample, dataset.n_examples_per_sample, *dataset.output_size), f"Expected example_ys shape to be {(dataset.n_functions_per_sample, dataset.n_examples_per_sample, *dataset.output_size)}, got {example_ys.shape}"
-    assert xs.shape == (dataset.n_functions_per_sample, dataset.n_points_per_sample, *dataset.input_size), f"Expected xs shape to be {(dataset.n_functions_per_sample, dataset.n_points_per_sample, *dataset.input_size)}, got {xs.shape}"
-    assert ys.shape == (dataset.n_functions_per_sample, dataset.n_points_per_sample, *dataset.output_size), f"Expected ys shape to be {(dataset.n_functions_per_sample, dataset.n_points_per_sample, *dataset.output_size)}, got {ys.shape}"
-    assert type(info) == dict, f"Expected info to be a dict, got {type(info)}"
+    def check_dataset(self):
+        """ Verify that a dataset is correctly implemented. Throws error if violated. 
+        I would advise against overriding this method, as it is used to verify that the dataset is implemented correctly.
+        However, if your use case is very different, you may need to."""
+        out = self.sample("cpu")
+        assert len(out) == 5, f"Expected 5 outputs, got {len(out)}"
+        
+        example_xs, example_ys, xs, ys, info = out
+        assert type(example_xs) == torch.Tensor, f"Expected example_xs to be a torch.Tensor, got {type(example_xs)}"
+        assert type(example_ys) == torch.Tensor, f"Expected example_ys to be a torch.Tensor, got {type(example_ys)}"
+        assert type(xs) == torch.Tensor, f"Expected xs to be a torch.Tensor, got {type(xs)}"
+        assert type(ys) == torch.Tensor, f"Expected ys to be a torch.Tensor, got {type(ys)}"
+        assert example_xs.shape == (self.n_functions_per_sample, self.n_examples_per_sample, *self.input_size), f"Expected example_xs shape to be {(self.n_functions_per_sample, self.n_examples_per_sample, *self.input_size)}, got {example_xs.shape}"
+        assert example_ys.shape == (self.n_functions_per_sample, self.n_examples_per_sample, *self.output_size), f"Expected example_ys shape to be {(self.n_functions_per_sample, self.n_examples_per_sample, *self.output_size)}, got {example_ys.shape}"
+        assert xs.shape == (self.n_functions_per_sample, self.n_points_per_sample, *self.input_size), f"Expected xs shape to be {(self.n_functions_per_sample, self.n_points_per_sample, *self.input_size)}, got {xs.shape}"
+        assert ys.shape == (self.n_functions_per_sample, self.n_points_per_sample, *self.output_size), f"Expected ys shape to be {(self.n_functions_per_sample, self.n_points_per_sample, *self.output_size)}, got {ys.shape}"
+        assert type(info) == dict, f"Expected info to be a dict, got {type(info)}"

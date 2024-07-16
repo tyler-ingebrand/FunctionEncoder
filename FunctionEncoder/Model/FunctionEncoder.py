@@ -4,7 +4,7 @@ from tqdm import trange
 from torch.utils.tensorboard import SummaryWriter
 
 from FunctionEncoder.Callbacks.BaseCallback import BaseCallback
-from FunctionEncoder.Dataset.BaseDataset import BaseDataset, check_dataset
+from FunctionEncoder.Dataset.BaseDataset import BaseDataset
 from FunctionEncoder.Model.Architecture.Euclidean import Euclidean
 from FunctionEncoder.Model.Architecture.MLP import MLP
 
@@ -32,6 +32,7 @@ class FunctionEncoder(torch.nn.Module):
                  model_kwargs:dict=dict(),
                  method:str="least_squares", 
                  use_residuals_method:bool=False,  
+                 regularization_parameter:float=1.0, 
                  ):
         """ Initializes a function encoder.
 
@@ -44,6 +45,7 @@ class FunctionEncoder(torch.nn.Module):
         model_kwargs: Union[dict, type(None)]: The kwargs to pass to the model. See the types and kwargs in FunctionEncoder/Model/Architecture.
         method: str: "inner_product" or "least_squares". Determines how to compute the coefficients of the basis functions.
         use_residuals_method: bool: Whether to use the residuals method. If True, uses an average function to predict the average of the data, and then learns the error with a function encoder.
+        regularization_parameter: float: The regularization parameter for the least squares method, that encourages the basis functions to be unit length. 1 is usually good, but if your ys are very large, this may need to be increased.
         """
 
         assert len(input_size) == 1, "Only 1D input supported for now"
@@ -67,6 +69,8 @@ class FunctionEncoder(torch.nn.Module):
         if self.average_function is not None:
             params += [*self.average_function.parameters()]
         self.opt = torch.optim.Adam(params, lr=1e-3)
+
+        self.regularization_parameter = regularization_parameter
 
         # for printing
         self.model_type = model_type
@@ -497,7 +501,7 @@ class FunctionEncoder(torch.nn.Module):
         list[float]: The losses at each epoch."""
 
         # verify dataset is correct
-        check_dataset(dataset)
+        dataset.check_dataset()
         
         # set device
         device = next(self.parameters()).device
@@ -541,7 +545,7 @@ class FunctionEncoder(torch.nn.Module):
             # add loss components
             loss = prediction_loss
             if self.method == "least_squares":
-                loss = loss + norm_loss
+                loss = loss + self.regularization_parameter * norm_loss
             if self.average_function is not None:
                 loss = loss + average_function_loss
             
@@ -567,6 +571,7 @@ class FunctionEncoder(torch.nn.Module):
         params["n_basis"] = self.n_basis
         params["method"] = self.method
         params["model_type"] = self.model_type
+        params["regularization_parameter"] = self.regularization_parameter
         for k, v in self.model_kwargs.items():
             params[k] = v
         params = {k: str(v) for k, v in params.items()}
