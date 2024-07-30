@@ -28,7 +28,7 @@ class FunctionEncoder(torch.nn.Module):
                  output_size:tuple[int], 
                  data_type:str, 
                  n_basis:int=100, 
-                 model_type:str="MLP",
+                 model_type:Union[str, type]="MLP",
                  model_kwargs:dict=dict(),
                  method:str="least_squares", 
                  use_residuals_method:bool=False,  
@@ -78,13 +78,13 @@ class FunctionEncoder(torch.nn.Module):
 
 
     def _build(self, 
-               model_type:str, 
+               model_type:Union[str, type],
                model_kwargs:dict, 
                average_function:bool=False) -> torch.nn.Module:
         """Builds a function encoder as a single model. Can also build the average function. 
         
         Args:
-        model_type: str: The type of model to use. See the types and kwargs in FunctionEncoder/Model/Architecture. Typically 'MLP'.
+        model_type: Union[str, type]: The type of model to use. See the types and kwargs in FunctionEncoder/Model/Architecture. Typically "MLP", can also be a custom class.
         model_kwargs: dict: The kwargs to pass to the model. See the kwargs in FunctionEncoder/Model/Architecture/.
         average_function: bool: Whether to build the average function. If True, builds a single function model.
 
@@ -98,18 +98,25 @@ class FunctionEncoder(torch.nn.Module):
         else:
             n_basis = self.n_basis
 
-        if model_type == "MLP":
-            return MLP(input_size=self.input_size,
-                       output_size=self.output_size,
-                       n_basis=n_basis,
-                       **model_kwargs)
-        elif model_type == "Euclidean":
-            return Euclidean(input_size=self.input_size,
-                             output_size=self.output_size,
-                             n_basis=n_basis,
-                             **model_kwargs)
-        else:
-            raise ValueError(f"Unknown model type: {model_type}")
+        # if provided as a string, parse the string into a class
+        if type(model_type) == str:
+            if model_type == "MLP":
+                return MLP(input_size=self.input_size,
+                           output_size=self.output_size,
+                           n_basis=n_basis,
+                           **model_kwargs)
+            elif model_type == "Euclidean":
+                return Euclidean(input_size=self.input_size,
+                                 output_size=self.output_size,
+                                 n_basis=n_basis,
+                                 **model_kwargs)
+            else:
+                raise ValueError(f"Unknown model type: {model_type}")
+        else:  # otherwise, assume it is a class and directly instantiate it
+            return model_type(input_size=self.input_size,
+                              output_size=self.output_size,
+                              n_basis=n_basis,
+                              **model_kwargs)
 
     def compute_representation(self, 
                                example_xs:torch.tensor, 
