@@ -33,6 +33,7 @@ class FunctionEncoder(torch.nn.Module):
                  method:str="least_squares", 
                  use_residuals_method:bool=False,  
                  regularization_parameter:float=1.0, 
+                 gradient_accumulation:int=1,
                  ):
         """ Initializes a function encoder.
 
@@ -46,6 +47,7 @@ class FunctionEncoder(torch.nn.Module):
         method: str: "inner_product" or "least_squares". Determines how to compute the coefficients of the basis functions.
         use_residuals_method: bool: Whether to use the residuals method. If True, uses an average function to predict the average of the data, and then learns the error with a function encoder.
         regularization_parameter: float: The regularization parameter for the least squares method, that encourages the basis functions to be unit length. 1 is usually good, but if your ys are very large, this may need to be increased.
+        gradient_accumulation: int: The number of batches to accumulate gradients over. Typically its best to have n_functions>=10 or so, and have gradient_accumulation=1. However, sometimes due to memory reasons, or because the functions do not have the same amount of data, its necesary for n_functions=1 and gradient_accumulation>=10.
         """
 
         assert len(input_size) == 1, "Only 1D input supported for now"
@@ -70,7 +72,10 @@ class FunctionEncoder(torch.nn.Module):
             params += [*self.average_function.parameters()]
         self.opt = torch.optim.Adam(params, lr=1e-3)
 
+        # regulation only used for LS method
         self.regularization_parameter = regularization_parameter
+        # accumulates gradients over multiple batches, typically used when n_functions=1 for memory reasons. 
+        self.gradient_accumulation = gradient_accumulation
 
         # for printing
         self.model_type = model_type
@@ -557,10 +562,11 @@ class FunctionEncoder(torch.nn.Module):
                 loss = loss + average_function_loss
             
             # backprop with gradient clipping
-            self.opt.zero_grad()
             loss.backward()
-            norm = torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
-            self.opt.step()
+            if (epoch+1) % self.gradient_accumulation == 0:
+                norm = torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
+                self.opt.step()
+                self.opt.zero_grad()
 
             # callbacks
             if callback is not None:

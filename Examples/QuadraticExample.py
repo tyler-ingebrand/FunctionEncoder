@@ -3,7 +3,8 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import torch
 
-from FunctionEncoder import QuadraticDataset, FunctionEncoder, MSECallback, ListCallback, TensorboardCallback
+from FunctionEncoder import QuadraticDataset, FunctionEncoder, MSECallback, ListCallback, TensorboardCallback, \
+    DistanceCallback
 
 import argparse
 
@@ -57,7 +58,8 @@ if load_path is None:
     # create callbacks
     cb1 = TensorboardCallback(logdir) # this one logs training data
     cb2 = MSECallback(dataset, device=device, tensorboard=cb1.tensorboard) # this one tests and logs the results
-    callback = ListCallback([cb1, cb2])
+    cb3 = DistanceCallback(dataset, device=device, tensorboard=cb1.tensorboard) # this one tests and logs the results
+    callback = ListCallback([cb1, cb2, cb3])
 
     # train the model
     model.train_model(dataset, epochs=epochs, callback=callback)

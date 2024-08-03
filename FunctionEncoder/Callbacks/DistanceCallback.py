@@ -40,7 +40,7 @@ class DistanceCallback(BaseCallback):
             y_hats = function_encoder.predict_from_examples(example_xs, example_ys, xs, method="least_squares")
 
             # measure mse
-            loss = function_encoder._distance(y_hats, ys).mean()
+            loss = function_encoder._distance(y_hats, ys, squared=True).mean()
 
             # log results
             self.tensorboard.add_scalar(f"{self.prefix}/distance", loss, self.total_epochs)
