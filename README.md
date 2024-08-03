@@ -41,6 +41,12 @@ As distributions are also Hilbert spaces, we can apply the exact same algorithm.
 
 ![A figure showing Gaussian donuts](imgs/donuts.png)
 
+## Related Papers
+
+* ["Zero-Shot Reinforcement Learning Via Function Encoders"](https://arxiv.org/abs/2401.17173)
+* ["Zero-Shot Transfer of Neural ODEs"](https://arxiv.org/abs/2405.08954)
+
+
 ## Citation
 
 If you use this repo for research, please cite 
