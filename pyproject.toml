@@ -7,7 +7,7 @@ exclude = ["Examples", "imgs"]  # exclude packages matching these glob patterns 
 
 [project]
 name = "FunctionEncoder"
-version = "0.0.4"
+version = "0.0.5"
 authors=[{name="Tyler Ingebrand", email="tyleringebrand@utexas.edu"}]
 description = """A package for learning basis functions over arbitrary function sets. This allows even high-dimensional problems to be solved via a minimal number of basis functions. This allows for zero-shot transfer within these spaces, and also a mechanism for fully informative function representation via the coefficients of the basis functions. Hilbert spaces are nifty."""
 readme = "README.md"
