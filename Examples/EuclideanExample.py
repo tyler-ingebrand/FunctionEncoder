@@ -26,17 +26,15 @@ class ListMSECallback(BaseCallback):
 
     def __init__(self,
                  testing_dataset:BaseDataset,
-                 device:Union[str, torch.device],
                  ):
         super(ListMSECallback, self).__init__()
         self.testing_dataset = testing_dataset
-        self.device = device
         self.losses = []
 
     def on_step(self, locals:dict):
         with torch.no_grad():
             function_encoder = locals["self"]
-            example_xs, example_ys, xs, ys, info = self.testing_dataset.sample(device=self.device)
+            example_xs, example_ys, xs, ys, info = self.testing_dataset.sample()
             y_hats = function_encoder.predict_from_examples(example_xs, example_ys, xs, method=function_encoder.method, lambd=0.0)
             loss = torch.mean((ys - y_hats) ** 2).item()
             self.losses.append(loss)
@@ -72,7 +70,7 @@ torch.manual_seed(seed)
 dataset = EuclideanDataset()
 
 # cb
-callback = ListMSECallback(dataset, device=device)
+callback = ListMSECallback(dataset)
 
 # create the model
 model = FunctionEncoder(input_size=dataset.input_size,

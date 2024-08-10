@@ -528,7 +528,7 @@ class FunctionEncoder(torch.nn.Module):
         losses = []
         bar = trange(epochs) if progress_bar else range(epochs)
         for epoch in bar:
-            example_xs, example_ys, xs, ys, _ = dataset.sample(device=device)
+            example_xs, example_ys, xs, ys, _ = dataset.sample()
 
             # train average function, if it exists
             if self.average_function is not None:

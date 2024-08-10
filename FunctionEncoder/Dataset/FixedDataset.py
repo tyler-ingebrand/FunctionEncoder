@@ -12,7 +12,8 @@ class FixedDataset(BaseDataset):
                  ys:torch.tensor,
                  n_functions_per_sample:int,
                  n_examples_per_sample:int,
-                 n_points_per_sample:int,):
+                 n_points_per_sample:int,
+                 device:str="auto"):
         assert len(xs.shape) == 3, f"xs must be a 3D tensor, the first dim corresponds to functions, the second to data points, the third to input size. Got shape: {xs.shape}"
         assert len(ys.shape) == 3, f"ys must be a 3D tensor, the first dim corresponds to functions, the second to data points, the third to output size. Got shape: {ys.shape}"
         assert xs.shape[0] == ys.shape[0], f"xs and ys must have the same number of functions. Got xs.shape[0]: {xs.shape[0]}, ys.shape[0]: {ys.shape[0]}"
@@ -25,29 +26,25 @@ class FixedDataset(BaseDataset):
                          n_functions_per_sample=n_functions_per_sample,
                          n_examples_per_sample=n_examples_per_sample,
                          n_points_per_sample=n_points_per_sample,
+                         device=device,
                          )
-        self.xs = xs
-        self.ys = ys
+        self.xs = xs.to(self.device)
+        self.ys = ys.to(self.device)
 
 
-    def sample(self, device:Union[str, torch.device]) -> Tuple[ torch.tensor,
+    def sample(self) -> Tuple[ torch.tensor,
                                                                 torch.tensor, 
                                                                 torch.tensor, 
                                                                 torch.tensor, 
                                                                 dict]:
-        function_indicies = torch.randint(0, self.n_functions, (self.n_functions_per_sample,), device=device)
-        example_indicies = torch.randint(0, self.n_samples_per_function, (self.n_examples_per_sample,), device=device)
-        point_indicies = torch.randint(0, self.n_points_per_sample, (self.n_points_per_sample,), device=device)
+        function_indicies = torch.randint(0, self.n_functions, (self.n_functions_per_sample,), device=self.device)
+        example_indicies = torch.randint(0, self.n_samples_per_function, (self.n_examples_per_sample,), device=self.device)
+        point_indicies = torch.randint(0, self.n_points_per_sample, (self.n_points_per_sample,), device=self.device)
         examples_xs = self.xs[function_indicies][:, example_indicies]
         examples_ys = self.ys[function_indicies][:, example_indicies]
         xs = self.xs[function_indicies][:, point_indicies]
         ys = self.ys[function_indicies][:, point_indicies]
 
-        # move to device
-        examples_xs = examples_xs.to(device)
-        examples_ys = examples_ys.to(device)
-        xs = xs.to(device)
-        ys = ys.to(device)
         info = {} # nothing interesting here
         return examples_xs, examples_ys, xs, ys, info
 

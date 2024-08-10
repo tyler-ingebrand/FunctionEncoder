@@ -32,7 +32,7 @@ class NLLCallback(BaseCallback):
             function_encoder = locals["self"]
 
             # sample testing data
-            example_xs, example_ys, xs, ys, info = self.testing_dataset.sample(device=self.device)
+            example_xs, example_ys, xs, ys, info = self.testing_dataset.sample()
 
             # compute representation
             logits = function_encoder.predict_from_examples(example_xs, example_ys, xs, method=function_encoder.method)

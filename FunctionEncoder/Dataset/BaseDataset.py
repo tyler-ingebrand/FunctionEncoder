@@ -17,6 +17,7 @@ class BaseDataset:
                  n_functions_per_sample:int,
                  n_examples_per_sample:int,
                  n_points_per_sample:int,
+                 device:str,
                  ):
         """ Constructor for BaseDataset
         
@@ -29,7 +30,7 @@ class BaseDataset:
         n_functions_per_sample (int): Number of functions per training step. Should be at least 5 or so.
         n_examples_per_sample (int): Number of example points per function per training step. This data is used by the function encoder to compute coefficients.
         n_points_per_sample (int): Number of target points per function per training step. Should be large enough to capture the function's behavior. These points are used to train the function encoder as the target of the prediction, ie the MSE.
-
+        device (str): Device to put the data on. Can be a string or a torch.device object. All computations should be done on this device. If possible, the CPU should not be involved in this class if device="cuda".
         """
         assert len(input_size) >= 1, "input_size must be a tuple of at least one element"
         assert len(output_size) >= 1, "output_size must be a tuple of at least one element"
@@ -44,17 +45,17 @@ class BaseDataset:
         self.n_functions_per_sample = n_functions_per_sample
         self.n_examples_per_sample = n_examples_per_sample
         self.n_points_per_sample = n_points_per_sample
+        self.device = device
+        if self.device == "auto":
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
     @abstractmethod
-    def sample(self, device:Union[str, torch.device]) -> Tuple[ torch.tensor,
-                                                                torch.tensor,                                                                 
-                                                                torch.tensor,
-                                                                torch.tensor,
-                                                                dict]:
+    def sample(self) -> Tuple[  torch.tensor,
+                                torch.tensor,                                                                 
+                                torch.tensor,
+                                torch.tensor,
+                                dict]:
         """Sample a batch of functions from the dataset.
-
-        Args:
-        device (Union[str, torch.device]): Device to put the data on. Can be a string or a torch.device object.
 
         Returns:
         torch.tensor: Example Input data to compute a representation. Shape is (n_functions, n_examples, input_size)
@@ -68,7 +69,7 @@ class BaseDataset:
         """ Verify that a dataset is correctly implemented. Throws error if violated. 
         I would advise against overriding this method, as it is used to verify that the dataset is implemented correctly.
         However, if your use case is very different, you may need to."""
-        out = self.sample("cpu")
+        out = self.sample()
         assert len(out) == 5, f"Expected 5 outputs, got {len(out)}"
         
         example_xs, example_ys, xs, ys, info = out

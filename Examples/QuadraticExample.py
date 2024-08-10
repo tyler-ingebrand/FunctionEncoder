@@ -57,9 +57,8 @@ if load_path is None:
 
     # create callbacks
     cb1 = TensorboardCallback(logdir) # this one logs training data
-    cb2 = MSECallback(dataset, device=device, tensorboard=cb1.tensorboard) # this one tests and logs the results
-    cb3 = DistanceCallback(dataset, device=device, tensorboard=cb1.tensorboard) # this one tests and logs the results
-    callback = ListCallback([cb1, cb2, cb3])
+    cb2 = DistanceCallback(dataset, device=device, tensorboard=cb1.tensorboard) # this one tests and logs the results
+    callback = ListCallback([cb1, cb2])
 
     # train the model
     model.train_model(dataset, epochs=epochs, callback=callback)
@@ -80,7 +79,7 @@ else:
 with torch.no_grad():
     n_plots = 9
     n_examples = 100
-    example_xs, example_ys, xs, ys, info = dataset.sample(device)
+    example_xs, example_ys, xs, ys, info = dataset.sample()
     example_xs, example_ys = example_xs[:, :n_examples, :], example_ys[:, :n_examples, :]
     if train_method == "inner_product":
         y_hats_ip = model.predict_from_examples(example_xs, example_ys, xs, method="inner_product")

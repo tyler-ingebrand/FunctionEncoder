@@ -73,7 +73,7 @@ with torch.no_grad():
     n_examples = 100
 
     # SAMPLE DATA
-    example_xs, example_ys, xs, ys, info = dataset.sample(device)
+    example_xs, example_ys, xs, ys, info = dataset.sample()
     example_xs, example_ys = example_xs[:, :n_examples, :], example_ys[:, :n_examples, :]
 
     # get predictions
@@ -97,7 +97,7 @@ with torch.no_grad():
 
         # add text labeling the sections with A, B, C, etc
         boundaries_i = boundaries[i]
-        boundaries_i = torch.cat([torch.tensor([0]), boundaries_i, torch.tensor([1])])
+        boundaries_i = torch.cat([torch.tensor([0]), boundaries_i.to("cpu"), torch.tensor([1])])
         for j in range(len(boundaries_i) - 1):
             a, b = boundaries_i[j], boundaries_i[j + 1]
             if torch.abs(a-b).item() > 0.05:

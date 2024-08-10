@@ -4,7 +4,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import torch
 
-from FunctionEncoder import GaussianDonutDataset, FunctionEncoder, NLLCallback, TensorboardCallback, ListCallback
+from FunctionEncoder import GaussianDonutDataset, FunctionEncoder, DistanceCallback, TensorboardCallback, ListCallback
 
 # parse args
 parser = argparse.ArgumentParser()
@@ -47,7 +47,7 @@ if load_path is None:
 
     # create callbacks
     cb1 = TensorboardCallback(logdir) # this one logs training data
-    cb2 = NLLCallback(dataset, device=device, tensorboard=cb1.tensorboard) # this one tests and logs the results
+    cb2 = DistanceCallback(dataset, device=device, tensorboard=cb1.tensorboard) # this one tests and logs the results
     callback = ListCallback([cb1, cb2])
 
     # train the model
@@ -74,7 +74,7 @@ with torch.no_grad():
     gs = plt.GridSpec(n_rows, n_cols + 1,  width_ratios=[4, 4, 4, 1])
     axes = [fig.add_subplot(gs[i // n_cols, i % n_cols], aspect='equal') for i in range(n_cols * n_rows)]
 
-    example_xs, example_ys, _, _, info = dataset.sample("cuda")
+    example_xs, example_ys, _, _, info = dataset.sample()
 
     # compute pdf over full space
     # compute pdf at grid points and plot using plt
