@@ -43,6 +43,6 @@ class DistanceCallback(BaseCallback):
             loss = function_encoder._distance(y_hats, ys, squared=True).mean()
 
             # log results
-            self.tensorboard.add_scalar(f"{self.prefix}/distance", loss, self.total_epochs)
+            self.tensorboard.add_scalar(f"{self.prefix}/mean_distance_squared", loss, self.total_epochs)
             self.total_epochs += 1
 

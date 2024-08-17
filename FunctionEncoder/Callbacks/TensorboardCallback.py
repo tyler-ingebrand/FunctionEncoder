@@ -37,12 +37,12 @@ class TensorboardCallback(BaseCallback):
         norm = locals["norm"]
 
         # log
-        self.tensorboard.add_scalar(f"{self.prefix}/prediction_loss", prediction_loss.item(), self.total_epochs)
-        self.tensorboard.add_scalar(f"{self.prefix}/grad_norm", norm.item(), self.total_epochs)
+        self.tensorboard.add_scalar(f"{self.prefix}/mean_distance_squared", prediction_loss.item(), self.total_epochs)
+        self.tensorboard.add_scalar(f"{self.prefix}/gradient_norm", norm.item(), self.total_epochs)
         if function_encoder.method == "least_squares":
             norm_loss = locals["norm_loss"]
-            self.tensorboard.add_scalar(f"{self.prefix}/norm_loss", norm_loss.item(), self.total_epochs)
+            self.tensorboard.add_scalar(f"{self.prefix}/basis_function_magnitude_loss", norm_loss.item(), self.total_epochs)
         if function_encoder.average_function is not None:
             average_function_loss = locals["average_function_loss"]
-            self.tensorboard.add_scalar(f"{self.prefix}/average_function_loss", average_function_loss.item(), self.total_epochs)
+            self.tensorboard.add_scalar(f"{self.prefix}/average_function_mean_distance_squared", average_function_loss.item(), self.total_epochs)
         self.total_epochs += 1
