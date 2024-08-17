@@ -126,7 +126,7 @@ class FunctionEncoder(torch.nn.Module):
     def compute_representation(self, 
                                example_xs:torch.tensor, 
                                example_ys:torch.tensor, 
-                               method:str="inner_product", 
+                               method:str="least_squares", 
                                **kwargs) -> Tuple[torch.tensor, Union[torch.tensor, None]]:
         """Computes the coefficients of the basis functions.
 
