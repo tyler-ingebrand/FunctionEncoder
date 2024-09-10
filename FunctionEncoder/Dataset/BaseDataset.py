@@ -17,7 +17,8 @@ class BaseDataset:
                  n_functions_per_sample:int,
                  n_examples_per_sample:int,
                  n_points_per_sample:int,
-                 device:str,
+                 device:str="auto",
+                 dtype:torch.dtype = torch.float32,
                  ):
         """ Constructor for BaseDataset
         
@@ -48,6 +49,7 @@ class BaseDataset:
         self.device = device
         if self.device == "auto":
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.dtype = dtype
 
     @abstractmethod
     def sample(self) -> Tuple[  torch.tensor,
@@ -82,3 +84,4 @@ class BaseDataset:
         assert xs.shape == (self.n_functions_per_sample, self.n_points_per_sample, *self.input_size), f"Expected xs shape to be {(self.n_functions_per_sample, self.n_points_per_sample, *self.input_size)}, got {xs.shape}"
         assert ys.shape == (self.n_functions_per_sample, self.n_points_per_sample, *self.output_size), f"Expected ys shape to be {(self.n_functions_per_sample, self.n_points_per_sample, *self.output_size)}, got {ys.shape}"
         assert type(info) == dict, f"Expected info to be a dict, got {type(info)}"
+        assert example_xs.dtype == example_ys.dtype == xs.dtype == ys.dtype == self.dtype, f"Expected all tensors to have dtype {self.dtype}, got {example_xs.dtype}, {example_ys.dtype}, {xs.dtype}, {ys.dtype}"

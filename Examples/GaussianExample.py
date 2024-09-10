@@ -46,7 +46,7 @@ if load_path is None:
 
     # create callbacks
     cb1 = TensorboardCallback(logdir) # this one logs training data
-    cb2 = DistanceCallback(dataset, device=device, tensorboard=cb1.tensorboard) # this one tests and logs the results
+    cb2 = DistanceCallback(dataset, tensorboard=cb1.tensorboard) # this one tests and logs the results
     callback = ListCallback([cb1, cb2])
 
     # train the model

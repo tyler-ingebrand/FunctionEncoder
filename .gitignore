@@ -161,3 +161,4 @@ cython_debug/
 
 logs/
 experimental_logs/
+data/

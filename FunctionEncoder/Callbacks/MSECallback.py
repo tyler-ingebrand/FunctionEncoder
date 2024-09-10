@@ -11,7 +11,6 @@ class MSECallback(BaseCallback):
 
     def __init__(self,
                  testing_dataset:BaseDataset,
-                 device:Union[str, torch.device],
                  logdir: Union[str, None] = None,
                  tensorboard: Union[None, SummaryWriter] = None,
                  prefix="test",
@@ -21,7 +20,6 @@ class MSECallback(BaseCallback):
         assert logdir is None or tensorboard is None, "Only one of logdir or tensorboard can be provided"
         super(MSECallback, self).__init__()
         self.testing_dataset = testing_dataset
-        self.device = device
         if logdir is not None:
             self.tensorboard = SummaryWriter(logdir)
         else:

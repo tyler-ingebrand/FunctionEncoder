@@ -11,14 +11,12 @@ class NLLCallback(BaseCallback):
 
     def __init__(self,
                  testing_dataset:BaseDataset,
-                 device:Union[str, torch.device],
                  logdir: Union[str, None] = None,
                  tensorboard: Union[None, SummaryWriter] = None,
                  prefix:str="test",
                  ):
         super(NLLCallback, self).__init__()
         self.testing_dataset = testing_dataset
-        self.device = device
         if logdir is not None:
             self.tensorboard = SummaryWriter(logdir)
         else:

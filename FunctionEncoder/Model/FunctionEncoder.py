@@ -5,8 +5,10 @@ from torch.utils.tensorboard import SummaryWriter
 
 from FunctionEncoder.Callbacks.BaseCallback import BaseCallback
 from FunctionEncoder.Dataset.BaseDataset import BaseDataset
+from FunctionEncoder.Model.Architecture.CNN import CNN
 from FunctionEncoder.Model.Architecture.Euclidean import Euclidean
 from FunctionEncoder.Model.Architecture.MLP import MLP
+from FunctionEncoder.Model.Architecture.ParallelMLP import ParallelMLP
 
 
 class FunctionEncoder(torch.nn.Module):
@@ -49,8 +51,13 @@ class FunctionEncoder(torch.nn.Module):
         regularization_parameter: float: The regularization parameter for the least squares method, that encourages the basis functions to be unit length. 1 is usually good, but if your ys are very large, this may need to be increased.
         gradient_accumulation: int: The number of batches to accumulate gradients over. Typically its best to have n_functions>=10 or so, and have gradient_accumulation=1. However, sometimes due to memory reasons, or because the functions do not have the same amount of data, its necesary for n_functions=1 and gradient_accumulation>=10.
         """
-
-        assert len(input_size) == 1, "Only 1D input supported for now"
+        if model_type == "MLP":
+            assert len(input_size) == 1, "MLP only supports 1D input"
+        if model_type == "ParallelMLP":
+            assert len(input_size) == 1, "ParallelMLP only supports 1D input"
+        if model_type == "CNN":
+            assert len(input_size) == 3, "CNN only supports 3D input"
+        assert len(input_size) in [1, 3], "Input must either be 1-Dimensional (euclidean vector) or 3-Dimensional (image)"
         assert input_size[0] >= 1, "Input size must be at least 1"
         assert len(output_size) == 1, "Only 1D output supported for now"
         assert output_size[0] >= 1, "Output size must be at least 1"
@@ -110,13 +117,23 @@ class FunctionEncoder(torch.nn.Module):
                            output_size=self.output_size,
                            n_basis=n_basis,
                            **model_kwargs)
+            if model_type == "ParallelMLP":
+                return ParallelMLP(input_size=self.input_size,
+                                   output_size=self.output_size,
+                                   n_basis=n_basis,
+                                   **model_kwargs)
             elif model_type == "Euclidean":
                 return Euclidean(input_size=self.input_size,
                                  output_size=self.output_size,
                                  n_basis=n_basis,
                                  **model_kwargs)
+            elif model_type == "CNN":
+                return CNN(input_size=self.input_size,
+                           output_size=self.output_size,
+                           n_basis=n_basis,
+                           **model_kwargs)
             else:
-                raise ValueError(f"Unknown model type: {model_type}")
+                raise ValueError(f"Unknown model type: {model_type}. Should be one of 'MLP', 'ParallelMLP', 'Euclidean', or 'CNN'")
         else:  # otherwise, assume it is a class and directly instantiate it
             return model_type(input_size=self.input_size,
                               output_size=self.output_size,
@@ -444,7 +461,7 @@ class FunctionEncoder(torch.nn.Module):
         torch.tensor: The predicted output. Shape (n_functions, n_datapoints, output_size)
         """
 
-        assert len(xs.shape) == 3, f"Expected xs to have shape (f,d,n), got {xs.shape}"
+        assert len(xs.shape) == 2 + len(self.input_size), f"Expected xs to have shape (f,d,*n), got {xs.shape}"
         assert len(representations.shape) == 2, f"Expected representations to have shape (f,k), got {representations.shape}"
         assert xs.shape[0] == representations.shape[0], f"Expected xs and representations to have the same number of functions, got {xs.shape[0]} and {representations.shape[0]}"
 
@@ -467,7 +484,7 @@ class FunctionEncoder(torch.nn.Module):
                               example_xs:torch.tensor, 
                               example_ys:torch.tensor, 
                               xs:torch.tensor, 
-                              method:str="inner_product",
+                              method:str="least_squares",
                               **kwargs):
         """ Predicts the output of the function encoder given the input data and the example data. Uses the average function if it exists.
         
@@ -482,11 +499,11 @@ class FunctionEncoder(torch.nn.Module):
         torch.tensor: The predicted output. Shape (n_functions, n_datapoints, output_size)
         """
 
-        assert len(example_xs.shape) == 3, f"Expected example_xs to have shape (f,d,n), got {example_xs.shape}"
-        assert len(example_ys.shape) == 3, f"Expected example_ys to have shape (f,d,m), got {example_ys.shape}"
-        assert len(xs.shape) == 3, f"Expected xs to have shape (f,d,n), got {xs.shape}"
+        assert len(example_xs.shape) == 2 + len(self.input_size), f"Expected example_xs to have shape (f,d,*n), got {example_xs.shape}"
+        assert len(example_ys.shape) == 2 + len(self.output_size), f"Expected example_ys to have shape (f,d,*m), got {example_ys.shape}"
+        assert len(xs.shape) == 2 + len(self.input_size), f"Expected xs to have shape (f,d,*n), got {xs.shape}"
         assert example_xs.shape[-len(self.input_size):] == self.input_size, f"Expected example_xs to have shape (..., {self.input_size}), got {example_xs.shape[-1]}"
-        assert example_ys.shape[-len(self.input_size):] == self.output_size, f"Expected example_ys to have shape (..., {self.output_size}), got {example_ys.shape[-1]}"
+        assert example_ys.shape[-len(self.output_size):] == self.output_size, f"Expected example_ys to have shape (..., {self.output_size}), got {example_ys.shape[-1]}"
         assert xs.shape[-len(self.input_size):] == self.input_size, f"Expected xs to have shape (..., {self.input_size}), got {xs.shape[-1]}"
         assert example_xs.shape[0] == example_ys.shape[0], f"Expected example_xs and example_ys to have the same number of functions, got {example_xs.shape[0]} and {example_ys.shape[0]}"
         assert example_xs.shape[1] == example_xs.shape[1], f"Expected example_xs and example_ys to have the same number of datapoints, got {example_xs.shape[1]} and {example_ys.shape[1]}"

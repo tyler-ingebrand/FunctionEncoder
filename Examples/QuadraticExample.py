@@ -17,6 +17,7 @@ parser.add_argument("--epochs", type=int, default=1_000)
 parser.add_argument("--load_path", type=str, default=None)
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--residuals", action="store_true")
+parser.add_argument("--parallel", action="store_true")
 args = parser.parse_args()
 
 
@@ -32,17 +33,18 @@ if load_path is None:
     logdir = f"logs/quadratic_example/{train_method}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
 else:
     logdir = load_path
+arch = "MLP" if not args.parallel else "ParallelMLP"
 
 # seed torch
 torch.manual_seed(seed)
 
 # create a dataset
 if residuals:
-    a_range = (0, 3) # this makes the true average function non-zero
+    a_range = (0, 3/50) # this makes the true average function non-zero
 else:
-    a_range = (-3, 3)
-b_range = (-3, 3)
-c_range = (-3, 3)
+    a_range = (-3/50, 3/50)
+b_range = (-3/50, 3/50)
+c_range = (-3/50, 3/50)
 input_range = (-10, 10)
 dataset = QuadraticDataset(a_range=a_range, b_range=b_range, c_range=c_range, input_range=input_range)
 
@@ -52,12 +54,14 @@ if load_path is None:
                             output_size=dataset.output_size,
                             data_type=dataset.data_type,
                             n_basis=n_basis,
+                            model_type=arch,
                             method=train_method,
                             use_residuals_method=residuals).to(device)
+    print('Number of parameters:', sum(p.numel() for p in model.parameters()))
 
     # create callbacks
     cb1 = TensorboardCallback(logdir) # this one logs training data
-    cb2 = DistanceCallback(dataset, device=device, tensorboard=cb1.tensorboard) # this one tests and logs the results
+    cb2 = DistanceCallback(dataset, tensorboard=cb1.tensorboard) # this one tests and logs the results
     callback = ListCallback([cb1, cb2])
 
     # train the model
@@ -71,6 +75,7 @@ else:
                             output_size=dataset.output_size,
                             data_type=dataset.data_type,
                             n_basis=n_basis,
+                            model_type=arch,
                             method=train_method,
                             use_residuals_method=residuals).to(device)
     model.load_state_dict(torch.load(f"{logdir}/model.pth"))

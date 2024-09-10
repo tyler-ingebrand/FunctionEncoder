@@ -11,7 +11,6 @@ class DistanceCallback(BaseCallback):
 
     def __init__(self,
                  testing_dataset:BaseDataset,
-                 device:Union[str, torch.device],
                  logdir: Union[str, None] = None,
                  tensorboard: Union[None, SummaryWriter] = None,
                  prefix="test",
@@ -21,13 +20,16 @@ class DistanceCallback(BaseCallback):
         assert logdir is None or tensorboard is None, "Only one of logdir or tensorboard can be provided"
         super(DistanceCallback, self).__init__()
         self.testing_dataset = testing_dataset
-        self.device = device
         if logdir is not None:
             self.tensorboard = SummaryWriter(logdir)
         else:
             self.tensorboard = tensorboard
         self.prefix = prefix
         self.total_epochs = 0
+
+    def on_training_start(self, locals: dict) -> None:
+        if self.total_epochs == 0: # logs loss before any updates.
+            self.on_step(locals)
 
     def on_step(self, locals:dict):
         with torch.no_grad():
