@@ -5,6 +5,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from FunctionEncoder.Callbacks.BaseCallback import BaseCallback
 from FunctionEncoder.Dataset.BaseDataset import BaseDataset
+from FunctionEncoder.Model.Architecture.BaseArchitecture import BaseArchitecture
 from FunctionEncoder.Model.Architecture.CNN import CNN
 from FunctionEncoder.Model.Architecture.Euclidean import Euclidean
 from FunctionEncoder.Model.Architecture.MLP import MLP
@@ -57,6 +58,8 @@ class FunctionEncoder(torch.nn.Module):
             assert len(input_size) == 1, "ParallelMLP only supports 1D input"
         if model_type == "CNN":
             assert len(input_size) == 3, "CNN only supports 3D input"
+        if isinstance(model_type, type):
+            assert issubclass(model_type, BaseArchitecture), "model_type should be a subclass of BaseArchitecture. This just gives a way of predicting the number of parameters before init."
         assert len(input_size) in [1, 3], "Input must either be 1-Dimensional (euclidean vector) or 3-Dimensional (image)"
         assert input_size[0] >= 1, "Input size must be at least 1"
         assert len(output_size) == 1, "Only 1D output supported for now"
@@ -87,6 +90,12 @@ class FunctionEncoder(torch.nn.Module):
         # for printing
         self.model_type = model_type
         self.model_kwargs = model_kwargs
+
+        # verify number of parameters
+        n_params = sum([p.numel() for p in self.parameters()])
+        estimated_n_params = FunctionEncoder.predict_number_params(input_size=input_size, output_size=output_size, n_basis=n_basis, model_type=model_type, model_kwargs=model_kwargs, use_residuals_method=use_residuals_method)
+        assert n_params == estimated_n_params, f"Model has {n_params} parameters, but expected {estimated_n_params} parameters."
+
 
 
     def _build(self, 
@@ -606,3 +615,39 @@ class FunctionEncoder(torch.nn.Module):
             params[k] = v
         params = {k: str(v) for k, v in params.items()}
         return params
+
+    @staticmethod
+    def predict_number_params(input_size:tuple[int],
+                             output_size:tuple[int],
+                             n_basis:int=100,
+                             model_type:Union[str, type]="MLP",
+                             model_kwargs:dict=dict(),
+                             use_residuals_method: bool = False,
+                             *args, **kwargs):
+        """ Predicts the number of parameters in the function encoder.
+        Useful for ensuring all experiments use the same number of params"""
+        n_params = 0
+        if model_type == "MLP":
+            n_params += MLP.predict_number_params(input_size, output_size, n_basis, **model_kwargs)
+            if use_residuals_method:
+                n_params += MLP.predict_number_params(input_size, output_size, 1, **model_kwargs)
+        elif model_type == "ParallelMLP":
+            n_params += ParallelMLP.predict_number_params(input_size, output_size, n_basis, **model_kwargs)
+            if use_residuals_method:
+                n_params += ParallelMLP.predict_number_params(input_size, output_size, 1, **model_kwargs)
+        elif model_type == "Euclidean":
+            n_params += Euclidean.predict_number_params(output_size, n_basis)
+            if use_residuals_method:
+                n_params += Euclidean.predict_number_params(output_size, 1)
+        elif model_type == "CNN":
+            n_params += CNN.predict_number_params(input_size, output_size, n_basis, **model_kwargs)
+            if use_residuals_method:
+                n_params += CNN.predict_number_params(input_size, output_size, 1, **model_kwargs)
+        elif isinstance(model_type, type):
+            n_params += model_type.predict_number_params(input_size, output_size, n_basis, **model_kwargs)
+            if use_residuals_method:
+                n_params += model_type.predict_number_params(input_size, output_size, 1, **model_kwargs)
+        else:
+            raise ValueError(f"Unknown model type: '{model_type}'. Should be one of 'MLP', 'ParallelMLP', 'Euclidean', or 'CNN'")
+
+        return n_params

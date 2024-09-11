@@ -1,10 +1,12 @@
 import torch
 import warnings
 
+from FunctionEncoder.Model.Architecture.BaseArchitecture import BaseArchitecture
 
-class Euclidean(torch.nn.Module):
+
+class Euclidean(BaseArchitecture):
     @staticmethod
-    def predict_number_params(input_size, output_size, n_basis, hidden_size, n_layers):
+    def predict_number_params(output_size, n_basis, **kwargs):
         return n_basis * output_size[0]
 
     def __init__(self,

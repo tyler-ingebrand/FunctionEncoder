@@ -2,6 +2,7 @@ import math
 
 import torch
 
+from FunctionEncoder.Model.Architecture.BaseArchitecture import BaseArchitecture
 from FunctionEncoder.Model.Architecture.MLP import get_activation
 
 
@@ -48,7 +49,7 @@ class ParallelLinear(torch.nn.Module):
 
 
 
-class ParallelMLP(torch.nn.Module):
+class ParallelMLP(BaseArchitecture):
     @staticmethod
     def predict_number_params(input_size, output_size, n_basis, hidden_size, n_layers):
         input_size = input_size[0]

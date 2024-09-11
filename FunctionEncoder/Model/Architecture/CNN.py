@@ -2,10 +2,11 @@ from typing import Iterable, List
 
 import torch
 
+from FunctionEncoder.Model.Architecture.BaseArchitecture import BaseArchitecture
 from FunctionEncoder.Model.Architecture.MLP import get_activation, MLP
 
 
-class ConvLayers(torch.nn.Module):
+class ConvLayers(BaseArchitecture):
     @staticmethod
     def predict_flatten_size(input_size:tuple[int],
                              conv_kernel_size:int=3,
@@ -71,7 +72,7 @@ class ConvLayers(torch.nn.Module):
 
 
 
-class CNN(torch.nn.Module):
+class CNN(BaseArchitecture):
 
     @staticmethod
     def predict_number_params(input_size:tuple[int],
