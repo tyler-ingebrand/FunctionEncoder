@@ -52,8 +52,11 @@ class MLP(torch.nn.Module):
             layers.append(get_activation(activation))
         layers.append(torch.nn.Linear(hidden_size, output_size))
         self.model = torch.nn.Sequential(*layers)
-        assert sum([p.numel() for p in self.parameters()]) == self.predict_number_params(self.input_size, self.output_size, n_basis, hidden_size, n_layers)
 
+        # verify number of parameters
+        n_params = sum([p.numel() for p in self.parameters()])
+        estimated_n_params = self.predict_number_params(self.input_size, self.output_size, n_basis, hidden_size, n_layers)
+        assert n_params == estimated_n_params, f"Model has {n_params} parameters, but expected {estimated_n_params} parameters."
 
 
     def forward(self, x):
