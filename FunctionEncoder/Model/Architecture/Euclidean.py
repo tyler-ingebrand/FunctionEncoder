@@ -3,7 +3,9 @@ import warnings
 
 
 class Euclidean(torch.nn.Module):
-
+    @staticmethod
+    def predict_number_params(input_size, output_size, n_basis, hidden_size, n_layers):
+        return n_basis * output_size[0]
 
     def __init__(self,
                  input_size:tuple[int],

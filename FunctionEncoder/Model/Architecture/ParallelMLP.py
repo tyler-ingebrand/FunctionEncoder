@@ -19,6 +19,7 @@ class ParallelLinear(torch.nn.Module):
         self.p = p
         self.reset_parameters()
 
+
     def reset_parameters(self) -> None:
         # this function was designed for a single layer, so we need to do it k times to not break their code.
         # this is slow but we only pay this cost once.
@@ -48,6 +49,17 @@ class ParallelLinear(torch.nn.Module):
 
 
 class ParallelMLP(torch.nn.Module):
+    @staticmethod
+    def predict_number_params(input_size, output_size, n_basis, hidden_size, n_layers):
+        input_size = input_size[0]
+        output_size = output_size[0]
+        # +1 accounts for bias
+        n_params =  (input_size+1) * hidden_size + \
+                    (hidden_size+1) * hidden_size * (n_layers - 2) + \
+                    (hidden_size+1) * output_size
+        n_params *= n_basis
+        return n_params
+
 
     def __init__(self,
                  input_size:tuple[int],
@@ -77,6 +89,7 @@ class ParallelMLP(torch.nn.Module):
             layers.append(get_activation(activation))
         layers.append(ParallelLinear(hidden_size, output_size, n_basis))
         self.model = torch.nn.Sequential(*layers)
+        assert sum([p.numel() for p in self.parameters()]) == self.predict_number_params(self.input_size, self.output_size, n_basis, hidden_size, n_layers)
 
 
 

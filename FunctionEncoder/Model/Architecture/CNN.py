@@ -5,6 +5,29 @@ from FunctionEncoder.Model.Architecture.MLP import get_activation
 
 class CNN(torch.nn.Module):
 
+    @staticmethod
+    def predict_number_params(input_size, output_size, n_basis, hidden_size, n_layers):
+        channels, height, width = input_size
+        output_size = output_size[0] * n_basis
+        kernel_size = 3
+
+        n_params = 0
+        # first conv2d
+        n_params += (kernel_size*kernel_size)*(channels)*(2*channels) + 2*channels
+        # second conv2d
+        n_params += (kernel_size*kernel_size)*(2*channels)*(4*channels) + 4*channels
+        # third conv2d
+        n_params += (kernel_size*kernel_size)*(4*channels)*(8*channels) + 8*channels
+        flatten_size = 8*channels * (height//2**3) * (width//2**3)
+        # first linear
+        n_params += flatten_size * hidden_size + hidden_size
+        # hidden layers
+        n_params += (hidden_size+1) * hidden_size * (n_layers - 2)
+        # last linear
+        n_params += (hidden_size+1) * output_size
+
+        return n_params
+
     def __init__(self,
                  input_size:tuple[int],
                  output_size:tuple[int],
@@ -40,8 +63,8 @@ class CNN(torch.nn.Module):
         layers.append(torch.nn.MaxPool2d(kernel_size=2, stride=2))
         layers.append(torch.nn.Conv2d(4*channels, 8*channels, kernel_size=3, padding=1))
         layers.append(torch.nn.MaxPool2d(kernel_size=2, stride=2))
-        layers.append(torch.nn.Flatten()) # we have two batch dims, number functions and number images.
-        flatten_size = torch.nn.Sequential(*layers)(torch.zeros(1, *input_size)).shape[-1]
+        layers.append(torch.nn.Flatten())
+        flatten_size = 8*channels * (height//2**3) * (width//2**3)
 
         # MLP part of net
         layers.append(torch.nn.Linear(flatten_size, hidden_size))
@@ -51,6 +74,8 @@ class CNN(torch.nn.Module):
             layers.append(get_activation(activation))
         layers.append(torch.nn.Linear(hidden_size, output_size))
         self.model = torch.nn.Sequential(*layers)
+
+        assert sum([p.numel() for p in self.parameters()]) == self.predict_number_params(self.input_size, self.output_size, n_basis, hidden_size, n_layers), f"Number of parameters is not as expected, got {sum([p.numel() for p in self.parameters()])} but expected {self.predict_number_params(self.input_size, self.output_size, n_basis, hidden_size, n_layers)}"
 
 
 
