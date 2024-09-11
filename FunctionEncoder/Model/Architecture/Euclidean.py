@@ -6,7 +6,7 @@ from FunctionEncoder.Model.Architecture.BaseArchitecture import BaseArchitecture
 
 class Euclidean(BaseArchitecture):
     @staticmethod
-    def predict_number_params(output_size, n_basis, **kwargs):
+    def predict_number_params(output_size, n_basis, *args, **kwargs):
         return n_basis * output_size[0]
 
     def __init__(self,

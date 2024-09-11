@@ -84,7 +84,8 @@ class CNN(BaseArchitecture):
                              conv_kernel_size: int = 3,
                              n_channels: List[int] = None,
                              maxpool_kernel_size: int = 2,
-                             maxpool_stride: int = 2,):
+                             maxpool_stride: int = 2,
+                              *args, **kwargs):
 
         flatten_size = ConvLayers.predict_flatten_size(input_size, conv_kernel_size, n_channels, maxpool_kernel_size, maxpool_stride)
         n_params_conv = ConvLayers.predict_number_params(input_size, conv_kernel_size, n_channels, maxpool_kernel_size, maxpool_stride)

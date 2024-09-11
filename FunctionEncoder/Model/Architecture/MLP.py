@@ -18,7 +18,7 @@ class MLP(BaseArchitecture):
 
 
     @staticmethod
-    def predict_number_params(input_size, output_size, n_basis, hidden_size=256, n_layers=4):
+    def predict_number_params(input_size, output_size, n_basis, hidden_size=256, n_layers=4, *args, **kwargs):
         input_size = input_size[0]
         output_size = output_size[0]
         # +1 accounts for bias

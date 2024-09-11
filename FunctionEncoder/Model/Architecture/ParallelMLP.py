@@ -51,7 +51,7 @@ class ParallelLinear(torch.nn.Module):
 
 class ParallelMLP(BaseArchitecture):
     @staticmethod
-    def predict_number_params(input_size, output_size, n_basis, hidden_size, n_layers):
+    def predict_number_params(input_size, output_size, n_basis, hidden_size, n_layers, *args, **kwargs):
         input_size = input_size[0]
         output_size = output_size[0]
         # +1 accounts for bias

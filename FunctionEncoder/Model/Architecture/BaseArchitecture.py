@@ -7,5 +7,5 @@ class BaseArchitecture(torch.nn.Module):
         super(BaseArchitecture, self).__init__()
 
     @staticmethod
-    def predict_number_params(input_size, output_size, n_basis, hidden_size, n_layers):
+    def predict_number_params(*args, **kwargs):
         raise NotImplementedError()
