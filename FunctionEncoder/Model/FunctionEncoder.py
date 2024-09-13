@@ -526,7 +526,8 @@ class FunctionEncoder(torch.nn.Module):
                     dataset: BaseDataset,
                     epochs: int,
                     progress_bar=True,
-                    callback:BaseCallback=None):
+                    callback:BaseCallback=None,
+                    **kwargs):
         """ Trains the function encoder on the dataset for some number of epochs.
         
         Args:
@@ -570,7 +571,7 @@ class FunctionEncoder(torch.nn.Module):
                 expected_yhats = None
 
             # approximate functions, compute error
-            representation, gram = self.compute_representation(example_xs, example_ys, method=self.method)
+            representation, gram = self.compute_representation(example_xs, example_ys, method=self.method, **kwargs)
             y_hats = self.predict(xs, representation, precomputed_average_ys=expected_yhats)
             prediction_loss = self._distance(y_hats, ys, squared=True).mean()
 
