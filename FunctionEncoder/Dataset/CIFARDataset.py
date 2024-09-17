@@ -128,7 +128,7 @@ class CIFARDataset(BaseDataset):
         class_indicies = torch.zeros((len(classes), count), device=self.device, dtype=torch.int64)
         for i in range(len(classes)):
             acceptable_indicies = self.training_indicies[self.training_indicies != classes[i]]
-            perm = torch.randperm(len(acceptable_indicies), device=self.device)[:count]
+            perm = torch.randint(0, len(acceptable_indicies), (count,), device=self.device)
             class_indicies[i] = acceptable_indicies[perm]
 
         # get random indicies of images
