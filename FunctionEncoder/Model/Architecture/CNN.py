@@ -15,6 +15,8 @@ class ConvLayers(BaseArchitecture):
                              maxpool_stride:int = 2,
                              *args, **kwargs):
         input_channels, height, width = input_size
+        if n_channels is None:
+            n_channels = [input_size[0], 2*input_size[0], 4*input_size[0], 8*input_size[0]]
         output_channels = n_channels[-1]
         maxpool_squeeze_size = maxpool_stride**(len(n_channels) - 1)
         flatten_size = output_channels * (height//maxpool_squeeze_size) * (width//maxpool_squeeze_size)
@@ -27,6 +29,8 @@ class ConvLayers(BaseArchitecture):
                              maxpool_kernel_size: int = 2,
                              maxpool_stride:int = 2,
                              *args, **kwargs):
+        if n_channels is None:
+            n_channels = [input_size[0], 2*input_size[0], 4*input_size[0], 8*input_size[0]]
         n_params = 0
         for in_channels, out_channels in zip(n_channels[:-1], n_channels[1:]):
             n_params += (conv_kernel_size*conv_kernel_size)*(in_channels)*(out_channels) + out_channels
