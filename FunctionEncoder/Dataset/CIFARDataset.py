@@ -15,6 +15,7 @@ class CIFARDataset(BaseDataset):
                  logit_scale=5,
                  split="train",
                  heldout_classes=["apple", "bear", "castle", "dolphin", "crab", "hamster", "motorcycle", "plain", "snail", "willow_tree"],
+                 heldout_classes_only=False,
                  n_functions_per_sample: int=10,
                  n_examples_per_sample: int=100,
                  n_points_per_sample: int=100,
@@ -57,6 +58,7 @@ class CIFARDataset(BaseDataset):
 
         # logit scale is used to specify how sharp the emprical distribution is. Higher values make the distribution sharper.
         self.logit_scale = logit_scale
+        self.heldout_classes_only = heldout_classes_only
 
     @abstractmethod
     def sample(self, heldout=False) -> Tuple[  torch.tensor,
@@ -66,7 +68,7 @@ class CIFARDataset(BaseDataset):
                                                 dict]:
         with torch.no_grad():
             # first randomly sample which classes to train on
-            classes = self.sample_classes(heldout)
+            classes = self.sample_classes(heldout or self.heldout_classes_only)
 
             # next, sample positive examples, ie images that belong to the class
             positive_example_xs, positive_example_class_indicies = self.sample_positive_examples(classes, self.n_examples_per_sample//2)
