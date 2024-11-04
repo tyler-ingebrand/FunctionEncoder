@@ -44,7 +44,8 @@ As distributions are also Hilbert spaces, we can apply the exact same algorithm.
 ## Related Papers
 
 * ["Zero-Shot Reinforcement Learning Via Function Encoders" (ICML 2024)](https://arxiv.org/abs/2401.17173)
-* ["Zero-Shot Transfer of Neural ODEs" (Under Review)](https://arxiv.org/abs/2405.08954)
+* ["Zero-Shot Transfer of Neural ODEs" (NeurIPS 2024)](https://arxiv.org/abs/2405.08954)
+* ["Basis-to-Basis Operator Learning Using Function Encoders" (CMAME)](https://arxiv.org/abs/2410.00171)
 
 
 ## Citation
