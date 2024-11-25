@@ -10,21 +10,40 @@ class CategoricalDataset(BaseDataset):
     def __init__(self,
                  input_range=(0,1),
                  n_categories=3,
-                 n_functions_per_sample:int = 10,
-                 n_examples_per_sample:int = 1_000,
-                 n_points_per_sample:int = 10_000,
                  logit_scale=5,
                  device:str="auto",
+                 n_functions=None,
+                 n_examples=None,
+                 n_queries=None,
+
+                 # deprecated arguments
+                 n_functions_per_sample: int = None,
+                 n_examples_per_sample: int = None,
+                 n_points_per_sample: int = None,
+
                  ):
+        if n_functions is None and n_functions_per_sample is None:
+            n_functions = 10
+        if n_examples is None and n_examples_per_sample is None:
+            n_examples = 100
+        if n_queries is None and n_points_per_sample is None:
+            n_queries = 1000
+
+
         super().__init__(input_size=(1,),
                          output_size=(n_categories,),
-                         total_n_functions=float('inf'),
-                         total_n_samples_per_function=float('inf'),
                          data_type="categorical",
+                         device=device,
+                         n_functions=n_functions,
+                         n_examples=n_examples,
+                         n_queries=n_queries,
+
+                         # deprecated arguments
+                         total_n_functions=None,
+                         total_n_samples_per_function=None,
                          n_functions_per_sample=n_functions_per_sample,
                          n_examples_per_sample=n_examples_per_sample,
                          n_points_per_sample=n_points_per_sample,
-                         device=device,
                          )
         self.n_categories = n_categories
         self.input_range = torch.tensor(input_range, device=self.device)
@@ -44,28 +63,25 @@ class CategoricalDataset(BaseDataset):
                                 torch.tensor, 
                                 dict]:
         with torch.no_grad():
-            n_functions = self.n_functions_per_sample
-            n_examples = self.n_examples_per_sample
-            n_points = self.n_points_per_sample
 
             # generate n_functions sets of coefficients
-            boundaries = torch.rand((n_functions, self.n_categories-1), device=self.device)  * (self.input_range[1] - self.input_range[0]) + self.input_range[0]
+            boundaries = torch.rand((self.n_functions, self.n_categories-1), device=self.device)  * (self.input_range[1] - self.input_range[0]) + self.input_range[0]
             boundaries = torch.sort(boundaries, dim=1).values
 
             # generate labels, each segment becomes a category
-            categories = torch.stack([torch.randperm(self.n_categories, device=self.device) for _ in range(n_functions)])
+            categories = torch.stack([torch.randperm(self.n_categories, device=self.device) for _ in range(self.n_functions)])
 
             # now generate input data
-            example_xs = torch.rand(n_functions, n_examples, 1, device=self.device) * (self.input_range[1] - self.input_range[0]) + self.input_range[0]
-            xs = torch.rand(n_functions, n_points, 1, device=self.device) * (self.input_range[1] - self.input_range[0]) + self.input_range[0]
+            example_xs = torch.rand(self.n_functions, self.n_examples, 1, device=self.device) * (self.input_range[1] - self.input_range[0]) + self.input_range[0]
+            query_xs = torch.rand(self.n_functions, self.n_queries, 1, device=self.device) * (self.input_range[1] - self.input_range[0]) + self.input_range[0]
 
             # generate labels with high logits for the correct category and low logits for the others
-            example_logits = self.states_to_logits(example_xs, categories, boundaries, n_functions, n_examples)
-            logits = self.states_to_logits(xs, categories, boundaries, n_functions, n_points)
+            example_logits = self.states_to_logits(example_xs, categories, boundaries, self.n_functions, self.n_examples)
+            logits = self.states_to_logits(query_xs, categories, boundaries, self.n_functions, self.n_queries)
 
             # create info dict
             info = {"boundaries": boundaries, "categories": categories}
 
 
         # the output for the first function should be chosen_categories[0][indexes[0]]
-        return example_xs, example_logits, xs, logits, info
+        return example_xs, example_logits, query_xs, logits, info

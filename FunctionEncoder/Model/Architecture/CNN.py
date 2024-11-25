@@ -89,11 +89,12 @@ class CNN(BaseArchitecture):
                              n_channels: List[int] = None,
                              maxpool_kernel_size: int = 2,
                              maxpool_stride: int = 2,
-                              *args, **kwargs):
+                             learn_basis_functions:bool=True,
+                             *args, **kwargs):
 
         flatten_size = ConvLayers.predict_flatten_size(input_size, conv_kernel_size, n_channels, maxpool_kernel_size, maxpool_stride)
         n_params_conv = ConvLayers.predict_number_params(input_size, conv_kernel_size, n_channels, maxpool_kernel_size, maxpool_stride)
-        n_params_mlp = MLP.predict_number_params((flatten_size,), output_size, n_basis, hidden_size, n_layers)
+        n_params_mlp = MLP.predict_number_params((flatten_size,), output_size, n_basis, hidden_size, n_layers, learn_basis_functions=learn_basis_functions)
         return n_params_conv + n_params_mlp
 
     def __init__(self,
@@ -107,6 +108,7 @@ class CNN(BaseArchitecture):
                  n_channels: List[int] = None,
                  maxpool_kernel_size: int = 2,
                  maxpool_stride: int = 2,
+                 learn_basis_functions:bool=True,
                  ):
         super(CNN, self).__init__()
         assert type(input_size) == tuple, "input_size must be a tuple"
@@ -126,17 +128,19 @@ class CNN(BaseArchitecture):
         self.input_size = input_size
         self.output_size = output_size
         self.n_basis = n_basis
+        self.hidden_size = hidden_size
+        self.learn_basis_functions = learn_basis_functions
 
         # build net
         flatten_size = ConvLayers.predict_flatten_size(input_size, conv_kernel_size, n_channels, maxpool_kernel_size, maxpool_stride)
         layers = []
         layers.append(ConvLayers(input_size, conv_kernel_size, n_channels, maxpool_kernel_size, maxpool_stride))
-        layers.append(MLP((flatten_size,), output_size, n_basis, hidden_size, n_layers, activation))
+        layers.append(MLP((flatten_size,), output_size, n_basis, hidden_size, n_layers, activation, learn_basis_functions=learn_basis_functions))
         self.model = torch.nn.Sequential(*layers)
 
         # verify correct number of parameters
         n_params = sum([p.numel() for p in self.parameters()])
-        expected_params = self.predict_number_params(input_size, output_size, n_basis, hidden_size, n_layers, activation, conv_kernel_size, n_channels, maxpool_kernel_size, maxpool_stride)
+        expected_params = self.predict_number_params(input_size, output_size, n_basis, hidden_size, n_layers, activation, conv_kernel_size, n_channels, maxpool_kernel_size, maxpool_stride, learn_basis_functions=learn_basis_functions)
         assert n_params == expected_params, f"Expected {expected_params} parameters, got {n_params}"
 
 
@@ -161,7 +165,7 @@ class CNN(BaseArchitecture):
         outs = outs.reshape(x.shape[0], x.shape[1], *outs.shape[1:])
 
         # reshape output dims
-        if self.n_basis > 1:
+        if self.learn_basis_functions:
             Gs = outs.view(*x.shape[:2], *self.output_size, self.n_basis)
         else:
             Gs = outs.view(*x.shape[:2], *self.output_size)

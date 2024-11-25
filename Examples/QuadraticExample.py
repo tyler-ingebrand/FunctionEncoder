@@ -30,7 +30,7 @@ seed = args.seed
 load_path = args.load_path
 residuals = args.residuals
 if load_path is None:
-    logdir = f"logs/quadratic_example/{train_method}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+    logdir = f"logs/quadratic_example/{train_method}/{'shared_model' if not args.parallel else 'parallel_models'}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
 else:
     logdir = load_path
 arch = "MLP" if not args.parallel else "ParallelMLP"
@@ -84,13 +84,13 @@ else:
 with torch.no_grad():
     n_plots = 9
     n_examples = 100
-    example_xs, example_ys, xs, ys, info = dataset.sample()
+    example_xs, example_ys, query_xs, query_ys, info = dataset.sample()
     example_xs, example_ys = example_xs[:, :n_examples, :], example_ys[:, :n_examples, :]
     if train_method == "inner_product":
-        y_hats_ip = model.predict_from_examples(example_xs, example_ys, xs, method="inner_product")
-    y_hats_ls = model.predict_from_examples(example_xs, example_ys, xs, method="least_squares")
-    xs, indicies = torch.sort(xs, dim=-2)
-    ys = ys.gather(dim=-2, index=indicies)
+        y_hats_ip = model.predict_from_examples(example_xs, example_ys, query_xs, method="inner_product")
+    y_hats_ls = model.predict_from_examples(example_xs, example_ys, query_xs, method="least_squares")
+    query_xs, indicies = torch.sort(query_xs, dim=-2)
+    query_ys = query_ys.gather(dim=-2, index=indicies)
     y_hats_ls = y_hats_ls.gather(dim=-2, index=indicies)
     if train_method == "inner_product":
         y_hats_ip = y_hats_ip.gather(dim=-2, index=indicies)
@@ -98,15 +98,15 @@ with torch.no_grad():
     fig, axs = plt.subplots(3, 3, figsize=(15, 10))
     for i in range(n_plots):
         ax = axs[i // 3, i % 3]
-        ax.plot(xs[i].cpu(), ys[i].cpu(), label="True")
-        ax.plot(xs[i].cpu(), y_hats_ls[i].cpu(), label="LS")
+        ax.plot(query_xs[i].cpu(), query_ys[i].cpu(), label="True")
+        ax.plot(query_xs[i].cpu(), y_hats_ls[i].cpu(), label="LS")
         if train_method == "inner_product":
-            ax.plot(xs[i].cpu(), y_hats_ip[i].cpu(), label="IP")
+            ax.plot(query_xs[i].cpu(), y_hats_ip[i].cpu(), label="IP")
         if i == n_plots - 1:
             ax.legend()
         title = f"${info['As'][i].item():.2f}x^2 + {info['Bs'][i].item():.2f}x + {info['Cs'][i].item():.2f}$"
         ax.set_title(title)
-        y_min, y_max = ys[i].min().item(), ys[i].max().item()
+        y_min, y_max = query_ys[i].min().item(), query_ys[i].max().item()
         ax.set_ylim(y_min, y_max)
 
     plt.tight_layout()
@@ -115,13 +115,13 @@ with torch.no_grad():
 
     # plot the basis functions
     fig, ax = plt.subplots(1, 1, figsize=(15, 10))
-    xs = torch.linspace(input_range[0], input_range[1], 1_000).reshape(1000, 1).to(device)
-    basis = model.model.forward(xs)
+    query_xs = torch.linspace(input_range[0], input_range[1], 1_000).reshape(1000, 1).to(device)
+    basis = model.forward_basis_functions(query_xs)
     for i in range(n_basis):
-        ax.plot(xs.flatten().cpu(), basis[:, 0, i].cpu(), color="black")
+        ax.plot(query_xs.flatten().cpu(), basis[:, 0, i].cpu(), color="black")
     if residuals:
-        avg_function = model.average_function.forward(xs)
-        ax.plot(xs.flatten().cpu(), avg_function.flatten().cpu(), color="blue")
+        avg_function = model.average_function.forward(query_xs)
+        ax.plot(query_xs.flatten().cpu(), avg_function.flatten().cpu(), color="blue")
 
     plt.tight_layout()
     plt.savefig(f"{logdir}/basis.png")

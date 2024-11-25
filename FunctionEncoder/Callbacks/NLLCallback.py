@@ -30,10 +30,10 @@ class NLLCallback(BaseCallback):
             function_encoder = locals["self"]
 
             # sample testing data
-            example_xs, example_ys, xs, ys, info = self.testing_dataset.sample()
+            example_xs, example_ys, query_xs, query_ys, info = self.testing_dataset.sample()
 
             # compute representation
-            logits = function_encoder.predict_from_examples(example_xs, example_ys, xs, method=function_encoder.method)
+            logits = function_encoder.predict_from_examples(example_xs, example_ys, query_xs, method=function_encoder.method)
 
             # measure mean_log_prob
             loss = -torch.mean(logits)

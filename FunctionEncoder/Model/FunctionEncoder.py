@@ -35,7 +35,7 @@ class FunctionEncoder(torch.nn.Module):
                  model_kwargs:dict=dict(),
                  method:str="least_squares", 
                  use_residuals_method:bool=False,  
-                 regularization_parameter:float=1.0, 
+                 regularization_parameter:float=1.0, # if you normalize your data, this is usually good
                  gradient_accumulation:int=1,
                  ):
         """ Initializes a function encoder.
@@ -113,40 +113,38 @@ class FunctionEncoder(torch.nn.Module):
         torch.nn.Module: The basis functions or average function model.
         """
 
-        # the average function is basically a single function, so n_basis is 1 
-        if average_function:
-            n_basis = 1
-        else:
-            n_basis = self.n_basis
-
         # if provided as a string, parse the string into a class
         if type(model_type) == str:
             if model_type == "MLP":
                 return MLP(input_size=self.input_size,
                            output_size=self.output_size,
-                           n_basis=n_basis,
+                           n_basis=self.n_basis,
+                           learn_basis_functions=not average_function,
                            **model_kwargs)
             if model_type == "ParallelMLP":
                 return ParallelMLP(input_size=self.input_size,
                                    output_size=self.output_size,
-                                   n_basis=n_basis,
+                                   n_basis=self.n_basis,
+                                   learn_basis_functions=not average_function,
                                    **model_kwargs)
             elif model_type == "Euclidean":
                 return Euclidean(input_size=self.input_size,
                                  output_size=self.output_size,
-                                 n_basis=n_basis,
+                                 n_basis=self.n_basis,
                                  **model_kwargs)
             elif model_type == "CNN":
                 return CNN(input_size=self.input_size,
                            output_size=self.output_size,
-                           n_basis=n_basis,
+                           n_basis=self.n_basis,
+                           learn_basis_functions=not average_function,
                            **model_kwargs)
             else:
                 raise ValueError(f"Unknown model type: {model_type}. Should be one of 'MLP', 'ParallelMLP', 'Euclidean', or 'CNN'")
         else:  # otherwise, assume it is a class and directly instantiate it
             return model_type(input_size=self.input_size,
                               output_size=self.output_size,
-                              n_basis=n_basis,
+                              n_basis=self.n_basis,
+                              learn_basis_functions=not average_function,
                               **model_kwargs)
 
     def compute_representation(self, 
@@ -442,7 +440,7 @@ class FunctionEncoder(torch.nn.Module):
 
         # set lambd to decrease with more data
         if lambd is None:
-            lambd = 1/(Gs.shape[1])
+            lambd = 1e-3 # emprically this does well. We need to investigate if there is an optimal value here.
 
         # compute gram
         gram = self._inner_product(Gs, Gs)
@@ -456,7 +454,7 @@ class FunctionEncoder(torch.nn.Module):
         return ls_representation, gram
 
     def predict(self, 
-                xs:torch.tensor,
+                query_xs:torch.tensor,
                 representations:torch.tensor, 
                 precomputed_average_ys:Union[torch.tensor, None]=None) -> torch.tensor:
         """ Predicts the output of the function encoder given the input data and the coefficients of the basis functions. Uses the average function if it exists.
@@ -470,12 +468,12 @@ class FunctionEncoder(torch.nn.Module):
         torch.tensor: The predicted output. Shape (n_functions, n_datapoints, output_size)
         """
 
-        assert len(xs.shape) == 2 + len(self.input_size), f"Expected xs to have shape (f,d,*n), got {xs.shape}"
+        assert len(query_xs.shape) == 2 + len(self.input_size), f"Expected xs to have shape (f,d,*n), got {query_xs.shape}"
         assert len(representations.shape) == 2, f"Expected representations to have shape (f,k), got {representations.shape}"
-        assert xs.shape[0] == representations.shape[0], f"Expected xs and representations to have the same number of functions, got {xs.shape[0]} and {representations.shape[0]}"
+        assert query_xs.shape[0] == representations.shape[0], f"Expected xs and representations to have the same number of functions, got {query_xs.shape[0]} and {representations.shape[0]}"
 
         # this is weighted combination of basis functions
-        Gs = self.model.forward(xs)
+        Gs = self.model.forward(query_xs)
         y_hats = torch.einsum("fdmk,fk->fdm", Gs, representations)
         
         # optionally add the average function
@@ -485,14 +483,14 @@ class FunctionEncoder(torch.nn.Module):
             if precomputed_average_ys is not None:
                 average_ys = precomputed_average_ys
             else:
-                average_ys = self.average_function.forward(xs)
+                average_ys = self.average_function.forward(query_xs)
             y_hats = y_hats + average_ys
         return y_hats
 
     def predict_from_examples(self, 
                               example_xs:torch.tensor, 
                               example_ys:torch.tensor, 
-                              xs:torch.tensor, 
+                              query_xs:torch.tensor,
                               method:str="least_squares",
                               **kwargs):
         """ Predicts the output of the function encoder given the input data and the example data. Uses the average function if it exists.
@@ -510,16 +508,16 @@ class FunctionEncoder(torch.nn.Module):
 
         assert len(example_xs.shape) == 2 + len(self.input_size), f"Expected example_xs to have shape (f,d,*n), got {example_xs.shape}"
         assert len(example_ys.shape) == 2 + len(self.output_size), f"Expected example_ys to have shape (f,d,*m), got {example_ys.shape}"
-        assert len(xs.shape) == 2 + len(self.input_size), f"Expected xs to have shape (f,d,*n), got {xs.shape}"
+        assert len(query_xs.shape) == 2 + len(self.input_size), f"Expected xs to have shape (f,d,*n), got {query_xs.shape}"
         assert example_xs.shape[-len(self.input_size):] == self.input_size, f"Expected example_xs to have shape (..., {self.input_size}), got {example_xs.shape[-1]}"
         assert example_ys.shape[-len(self.output_size):] == self.output_size, f"Expected example_ys to have shape (..., {self.output_size}), got {example_ys.shape[-1]}"
-        assert xs.shape[-len(self.input_size):] == self.input_size, f"Expected xs to have shape (..., {self.input_size}), got {xs.shape[-1]}"
+        assert query_xs.shape[-len(self.input_size):] == self.input_size, f"Expected xs to have shape (..., {self.input_size}), got {query_xs.shape[-1]}"
         assert example_xs.shape[0] == example_ys.shape[0], f"Expected example_xs and example_ys to have the same number of functions, got {example_xs.shape[0]} and {example_ys.shape[0]}"
         assert example_xs.shape[1] == example_xs.shape[1], f"Expected example_xs and example_ys to have the same number of datapoints, got {example_xs.shape[1]} and {example_ys.shape[1]}"
-        assert example_xs.shape[0] == xs.shape[0], f"Expected example_xs and xs to have the same number of functions, got {example_xs.shape[0]} and {xs.shape[0]}"
+        assert example_xs.shape[0] == query_xs.shape[0], f"Expected example_xs and xs to have the same number of functions, got {example_xs.shape[0]} and {query_xs.shape[0]}"
 
         representations, _ = self.compute_representation(example_xs, example_ys, method=method, **kwargs)
-        y_hats = self.predict(xs, representations)
+        y_hats = self.predict(query_xs, representations)
         return y_hats
 
     def train_model(self,
@@ -555,15 +553,15 @@ class FunctionEncoder(torch.nn.Module):
         losses = []
         bar = trange(epochs) if progress_bar else range(epochs)
         for epoch in bar:
-            example_xs, example_ys, xs, ys, _ = dataset.sample()
+            example_xs, example_ys, query_xs, query_ys, _ = dataset.sample()
 
             # train average function, if it exists
             if self.average_function is not None:
                 # predict averages
-                expected_yhats = self.average_function.forward(xs)
+                expected_yhats = self.average_function.forward(query_xs)
 
                 # compute average function loss
-                average_function_loss = self._distance(expected_yhats, ys, squared=True).mean()
+                average_function_loss = self._distance(expected_yhats, query_ys, squared=True).mean()
                 
                 # we only train average function to fit data in general, so block backprop from the basis function loss
                 expected_yhats = expected_yhats.detach()
@@ -572,8 +570,8 @@ class FunctionEncoder(torch.nn.Module):
 
             # approximate functions, compute error
             representation, gram = self.compute_representation(example_xs, example_ys, method=self.method, **kwargs)
-            y_hats = self.predict(xs, representation, precomputed_average_ys=expected_yhats)
-            prediction_loss = self._distance(y_hats, ys, squared=True).mean()
+            y_hats = self.predict(query_xs, representation, precomputed_average_ys=expected_yhats)
+            prediction_loss = self._distance(y_hats, query_ys, squared=True).mean()
 
             # LS requires regularization since it does not care about the scale of basis
             # so we force basis to move towards unit norm. They dont actually need to be unit, but this prevents them
@@ -629,26 +627,34 @@ class FunctionEncoder(torch.nn.Module):
         Useful for ensuring all experiments use the same number of params"""
         n_params = 0
         if model_type == "MLP":
-            n_params += MLP.predict_number_params(input_size, output_size, n_basis, **model_kwargs)
+            n_params += MLP.predict_number_params(input_size, output_size, n_basis, learn_basis_functions=True, **model_kwargs)
             if use_residuals_method:
-                n_params += MLP.predict_number_params(input_size, output_size, 1, **model_kwargs)
+                n_params += MLP.predict_number_params(input_size, output_size, n_basis,  learn_basis_functions=False, **model_kwargs)
         elif model_type == "ParallelMLP":
-            n_params += ParallelMLP.predict_number_params(input_size, output_size, n_basis, **model_kwargs)
+            n_params += ParallelMLP.predict_number_params(input_size, output_size, n_basis,  learn_basis_functions=True, **model_kwargs)
             if use_residuals_method:
-                n_params += ParallelMLP.predict_number_params(input_size, output_size, 1, **model_kwargs)
+                n_params += ParallelMLP.predict_number_params(input_size, output_size, n_basis, learn_basis_functions=False, **model_kwargs)
         elif model_type == "Euclidean":
             n_params += Euclidean.predict_number_params(output_size, n_basis)
             if use_residuals_method:
-                n_params += Euclidean.predict_number_params(output_size, 1)
+                n_params += Euclidean.predict_number_params(output_size, n_basis)
         elif model_type == "CNN":
-            n_params += CNN.predict_number_params(input_size, output_size, n_basis, **model_kwargs)
+            n_params += CNN.predict_number_params(input_size, output_size, n_basis,  learn_basis_functions=True, **model_kwargs)
             if use_residuals_method:
-                n_params += CNN.predict_number_params(input_size, output_size, 1, **model_kwargs)
+                n_params += CNN.predict_number_params(input_size, output_size, n_basis, learn_basis_functions=False, **model_kwargs)
         elif isinstance(model_type, type):
-            n_params += model_type.predict_number_params(input_size, output_size, n_basis, **model_kwargs)
+            n_params += model_type.predict_number_params(input_size, output_size, n_basis,  learn_basis_functions=True, **model_kwargs)
             if use_residuals_method:
-                n_params += model_type.predict_number_params(input_size, output_size, 1, **model_kwargs)
+                n_params += model_type.predict_number_params(input_size, output_size, n_basis, learn_basis_functions=False, **model_kwargs)
         else:
             raise ValueError(f"Unknown model type: '{model_type}'. Should be one of 'MLP', 'ParallelMLP', 'Euclidean', or 'CNN'")
 
         return n_params
+
+    def forward_basis_functions(self, xs:torch.tensor) -> torch.tensor:
+        """ Forward pass of the basis functions. """
+        return self.model.forward(xs)
+
+    def forward_average_function(self, xs:torch.tensor) -> torch.tensor:
+        """ Forward pass of the average function. """
+        return self.average_function.forward(xs) if self.average_function is not None else None

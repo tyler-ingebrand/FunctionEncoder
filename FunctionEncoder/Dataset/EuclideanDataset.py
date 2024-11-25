@@ -12,20 +12,13 @@ class EuclideanDataset(BaseDataset):
         input_size = (1,)
         output_size = (3,)
         data_type = "deterministic"
-        total_n_functions = float("inf")
-        total_n_samples_per_function = 1
-        n_functions_per_sample = 10
-        n_examples_per_sample = 1
-        n_points_per_sample = 1
         device = "cpu"
         super(EuclideanDataset, self).__init__(input_size=input_size,
                                               output_size=output_size,
-                                              total_n_functions=total_n_functions,
-                                              total_n_samples_per_function=total_n_samples_per_function,
                                               data_type=data_type,
-                                              n_functions_per_sample=n_functions_per_sample,
-                                              n_examples_per_sample=n_examples_per_sample,
-                                              n_points_per_sample=n_points_per_sample,
+                                              n_functions=10,
+                                              n_examples=1,
+                                              n_queries=1,
                                               device=device)
         self.min = torch.tensor([-1, -1, 0])
         self.max = torch.tensor([1, 1, 0])
@@ -36,11 +29,11 @@ class EuclideanDataset(BaseDataset):
                                                                 torch.tensor, 
                                                                 dict]:
         # these are unused, except for the size
-        example_xs = torch.zeros(self.n_functions_per_sample, self.n_examples_per_sample, *self.input_size)
-        xs = torch.zeros(self.n_functions_per_sample, self.n_points_per_sample, *self.input_size)
+        example_xs = torch.zeros(self.n_functions, self.n_examples, *self.input_size)
+        query_xs = torch.zeros(self.n_functions, self.n_queries, *self.input_size)
 
         # sample the ys
-        example_ys = torch.rand(self.n_functions_per_sample, self.n_examples_per_sample, *self.output_size) * (self.max - self.min) + self.min
-        ys = example_ys
+        example_ys = torch.rand(self.n_functions, self.n_examples, *self.output_size) * (self.max - self.min) + self.min
+        query_ys = example_ys
 
-        return example_xs, example_ys, xs, ys, {}
+        return example_xs, example_ys, query_xs, query_ys, {}

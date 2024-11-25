@@ -11,13 +11,11 @@ class GaussianDonutDataset(BaseDataset):
     def __init__(self, radius=0.9, noise=0.1, device:str="auto"):
         super().__init__(input_size=(2,), # this distribution is not conditioned on anything, so we just want to predict the pdf for all two-d inputs
                          output_size=(1,),
-                         total_n_functions=float("inf"),
-                         total_n_samples_per_function=float("inf"),
                          data_type="stochastic",
-                         n_functions_per_sample=10,
-                         n_examples_per_sample=200,
-                         n_points_per_sample=1_000,
                          device=device,
+                         n_functions=10,
+                         n_examples=200,
+                         n_queries=1_000,
                          )
         self.radius = radius
         self.noise = noise
@@ -34,31 +32,31 @@ class GaussianDonutDataset(BaseDataset):
                                 torch.tensor,
                                 dict]:
         # sample radiuses
-        radii = torch.rand((self.n_functions_per_sample, 1), device=self.device) * self.radius
+        radii = torch.rand((self.n_functions, 1), device=self.device) * self.radius
 
         # generate example set
-        angles = torch.rand((self.n_functions_per_sample, self.n_examples_per_sample//2), device=self.device) * 2 * 3.14159
+        angles = torch.rand((self.n_functions, self. n_examples//2), device=self.device) * 2 * 3.14159
         example_xs = torch.stack([radii * torch.cos(angles), radii * torch.sin(angles)], dim=-1)
         example_xs += torch.randn_like(example_xs) * self.noise
 
         # generate point set
-        angles = torch.rand((self.n_functions_per_sample, self.n_points_per_sample//2), device=self.device) * 2 * 3.14159
+        angles = torch.rand((self.n_functions, self. n_queries//2), device=self.device) * 2 * 3.14159
         xs = torch.stack([radii * torch.cos(angles), radii * torch.sin(angles)], dim=-1)
         xs += torch.randn_like(xs) * self.noise
 
         # concatenate points not from this distribution
-        example_xs2 = self.sample_inputs(n_functions=self.n_functions_per_sample, n_points=self.n_examples_per_sample//2)
-        xs2 = self.sample_inputs(n_functions=self.n_functions_per_sample, n_points=self.n_points_per_sample//2)
+        example_xs2 = self.sample_inputs(n_functions=self.n_functions, n_points=self. n_examples//2)
+        xs2 = self.sample_inputs(n_functions=self.n_functions, n_points=self. n_queries//2)
         example_xs = torch.cat([example_xs, example_xs2], dim=1)
         xs = torch.cat([xs, xs2], dim=1)
 
         # give high logit to sampled points, and low logit to others
-        example_ys = torch.zeros((self.n_functions_per_sample, self.n_examples_per_sample, 1), device=self.device)
-        example_ys[:, :self.n_examples_per_sample//2] = self.positive_logit
-        example_ys[:, self.n_examples_per_sample//2:] = self.negative_logit
-        ys = torch.zeros((self.n_functions_per_sample, self.n_points_per_sample, 1), device=self.device)
-        ys[:, :self.n_points_per_sample//2] = self.positive_logit
-        ys[:, self.n_points_per_sample//2:] = self.negative_logit
+        example_ys = torch.zeros((self.n_functions, self. n_examples, 1), device=self.device)
+        example_ys[:, :self. n_examples//2] = self.positive_logit
+        example_ys[:, self. n_examples//2:] = self.negative_logit
+        ys = torch.zeros((self.n_functions, self. n_queries, 1), device=self.device)
+        ys[:, :self. n_queries//2] = self.positive_logit
+        ys[:, self. n_queries//2:] = self.negative_logit
 
         # move device
         info = {"radii": radii}

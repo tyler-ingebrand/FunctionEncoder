@@ -16,22 +16,43 @@ class CIFARDataset(BaseDataset):
                  split="train",
                  heldout_classes=["apple", "bear", "castle", "dolphin", "crab", "hamster", "motorcycle", "plain", "snail", "willow_tree"],
                  heldout_classes_only=False,
-                 n_functions_per_sample: int=10,
-                 n_examples_per_sample: int=100,
-                 n_points_per_sample: int=100,
                  device: str = "auto",
                  dtype: torch.dtype = torch.float32,
+                 n_functions:int=None,
+                 n_examples:int=None,
+                 n_queries:int=None,
+
+                 # deprecated arguments
+                 n_functions_per_sample: int=None,
+                 n_examples_per_sample: int=None,
+                 n_points_per_sample: int=None,
+
                  ):
+        if n_functions is None and n_functions_per_sample is None:
+            n_functions = 10
+        if n_examples is None and n_examples_per_sample is None:
+            n_examples = 100
+        if n_queries is None and n_points_per_sample is None:
+            n_queries = 100
+
+
         super(CIFARDataset, self).__init__(input_size=(3, 32, 32),
                                            output_size=(2,),
-                                           total_n_functions=100,
-                                           total_n_samples_per_function=100,
                                            data_type="categorical",
+                                           device=device,
+                                           dtype=dtype,
+                                           n_functions=n_functions,
+                                           n_examples=n_examples,
+                                           n_queries=n_queries,
+
+
+                                           # deprecated arguments
+                                           total_n_functions=None,
+                                           total_n_samples_per_function=None,
                                            n_functions_per_sample=n_functions_per_sample,
                                            n_examples_per_sample=n_examples_per_sample,
                                            n_points_per_sample=n_points_per_sample,
-                                           device=device,
-                                           dtype=dtype,
+
                                            )
         assert split.lower() in ["train", "test"], "split must be 'train' or 'test'"
         train = True if split.lower() == "train" else False
@@ -71,24 +92,24 @@ class CIFARDataset(BaseDataset):
             classes = self.sample_classes(heldout or self.heldout_classes_only)
 
             # next, sample positive examples, ie images that belong to the class
-            positive_example_xs, positive_example_class_indicies = self.sample_positive_examples(classes, self.n_examples_per_sample//2)
-            positive_xs, positive_class_indicies = self.sample_positive_examples(classes, self.n_points_per_sample//2)
+            positive_example_xs, positive_example_class_indicies = self.sample_positive_examples(classes, self.n_examples//2)
+            positive_query_xs, positive_class_indicies = self.sample_positive_examples(classes, self.n_queries//2)
 
             # next, sample negative examples, ie random images from other classes
-            negative_example_xs, negative_example_class_indicies= self.sample_negative_examples(classes, self.n_examples_per_sample//2)
-            negative_xs, negative_class_indicies = self.sample_negative_examples(classes, self.n_points_per_sample//2)
+            negative_example_xs, negative_example_class_indicies= self.sample_negative_examples(classes, self.n_examples//2)
+            negative_query_xs, negative_class_indicies = self.sample_negative_examples(classes, self.n_queries//2)
 
             # concatenate the positive and negative examples
             example_xs = torch.cat([positive_example_xs, negative_example_xs], dim=1)
-            xs = torch.cat([positive_xs, negative_xs], dim=1)
+            query_xs = torch.cat([positive_query_xs, negative_query_xs], dim=1)
 
             # generate the ground truth labels
-            example_ys = self.logit_scale * torch.ones((self.n_functions_per_sample, self.n_examples_per_sample, 2), device=self.device)
-            ys = self.logit_scale * torch.ones((self.n_functions_per_sample, self.n_points_per_sample, 2), device=self.device)
-            example_ys[:, :self.n_examples_per_sample//2, 1] *= -1
-            example_ys[:, self.n_examples_per_sample//2:, 0] *= -1
-            ys[:, :self.n_points_per_sample//2, 1] *= -1
-            ys[:, self.n_points_per_sample//2:, 0] *= -1
+            example_ys = self.logit_scale * torch.ones((self.n_functions, self.n_examples, 2), device=self.device)
+            query_ys = self.logit_scale * torch.ones((self.n_functions, self.n_queries, 2), device=self.device)
+            example_ys[:, :self.n_examples//2, 1] *= -1
+            example_ys[:, self.n_examples//2:, 0] *= -1
+            query_ys[:, :self.n_queries//2, 1] *= -1
+            query_ys[:, self.n_queries//2:, 0] *= -1
 
             # fetch relevant info for plotting
             info = {"classes_idx": classes, "class_labels": [self.classes[class_idx] for class_idx in classes],
@@ -99,19 +120,19 @@ class CIFARDataset(BaseDataset):
                     }
 
             # return the data
-            return example_xs, example_ys, xs, ys, info
+            return example_xs, example_ys, query_xs, query_ys, info
 
 
     # samples which classes we will use for this batch
     def sample_classes(self, heldout):
         if heldout:
-            if self.n_functions_per_sample >= len(self.heldout_indicies):
+            if self.n_functions >= len(self.heldout_indicies):
                 classes = self.heldout_indicies
             else:
-                perm = torch.randperm(len(self.heldout_indicies), device=self.device)[:self.n_functions_per_sample]
+                perm = torch.randperm(len(self.heldout_indicies), device=self.device)[:self.n_functions]
                 classes = self.heldout_indicies[perm]
         else:
-            perm = torch.randperm(len(self.training_indicies), device=self.device)[:self.n_functions_per_sample]
+            perm = torch.randperm(len(self.training_indicies), device=self.device)[:self.n_functions]
             classes = self.training_indicies[perm]
         return classes
 

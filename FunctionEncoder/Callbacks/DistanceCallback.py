@@ -36,13 +36,13 @@ class DistanceCallback(BaseCallback):
             function_encoder = locals["self"]
 
             # sample testing data
-            example_xs, example_ys, xs, ys, info = self.testing_dataset.sample()
+            example_xs, example_ys, query_xs, query_ys, info = self.testing_dataset.sample()
 
             # compute representation
-            y_hats = function_encoder.predict_from_examples(example_xs, example_ys, xs, method="least_squares")
+            y_hats = function_encoder.predict_from_examples(example_xs, example_ys, query_xs, method=function_encoder.method)
 
             # measure mse
-            loss = function_encoder._distance(y_hats, ys, squared=True).mean()
+            loss = function_encoder._distance(y_hats, query_ys, squared=True).mean()
 
             # log results
             self.tensorboard.add_scalar(f"{self.prefix}/mean_distance_squared", loss, self.total_epochs)
