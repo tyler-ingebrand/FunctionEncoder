@@ -522,6 +522,26 @@ class FunctionEncoder(torch.nn.Module):
         y_hats = self.predict(query_xs, representations)
         return y_hats
 
+
+    def estimate_L2_error(self, example_xs, example_ys):
+        """ Estimates the L2 error of the function encoder on the example data. 
+        This gives an idea if the example data lies in the span of the basis, or not.
+        
+        Args:
+        example_xs: torch.tensor: The example input data used to compute a representation. Shape (n_functions, n_example_datapoints, input_size)
+        example_ys: torch.tensor: The example output data used to compute a representation. Shape (n_functions, n_example_datapoints, output_size)
+        
+        Returns:
+        torch.tensor: The estimated L2 error. Shape (n_functions,)
+        """
+        representation, gram = self.compute_representation(example_xs, example_ys, method="least_squares")
+        f_hat_norm_squared = representation @ gram @ representation.T
+        f_norm_squared = self._inner_product(example_ys, example_ys)
+        l2_distance = torch.sqrt(f_norm_squared - f_hat_norm_squared)
+        return l2_distance
+
+
+
     def train_model(self,
                     dataset: BaseDataset,
                     epochs: int,
