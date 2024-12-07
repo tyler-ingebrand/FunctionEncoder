@@ -36,7 +36,9 @@ class FunctionEncoder(torch.nn.Module):
                  method:str="least_squares", 
                  use_residuals_method:bool=False,  
                  regularization_parameter:float=1.0, # if you normalize your data, this is usually good
-                 gradient_accumulation:int=1,
+                 gradient_accumulation:int=1, # default: no gradient accumulation
+                 optimizer=torch.optim.Adam,
+                 optimizer_kwargs:dict={"lr":1e-3},
                  ):
         """ Initializes a function encoder.
 
@@ -80,7 +82,7 @@ class FunctionEncoder(torch.nn.Module):
         params = [*self.model.parameters()]
         if self.average_function is not None:
             params += [*self.average_function.parameters()]
-        self.opt = torch.optim.Adam(params, lr=1e-3)
+        self.opt = optimizer(params, **optimizer_kwargs) # usually ADAM with lr 1e-3
 
         # regulation only used for LS method
         self.regularization_parameter = regularization_parameter
