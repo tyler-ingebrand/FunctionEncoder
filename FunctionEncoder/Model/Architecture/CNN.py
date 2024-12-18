@@ -45,7 +45,7 @@ class ConvLayers(BaseArchitecture):
         super(ConvLayers, self).__init__()
         assert type(input_size) == tuple, "input_size must be a tuple"
         assert len(input_size) == 3, "input_size must be a tuple of length 3, CHW"
-        assert input_size[-3] <= 4, f"input_size[-3] must be <= 4 for RGB (and maybe D). Got {input_size[-3]}. Image order should be CHW. "
+        # assert input_size[-3] <= 4, f"input_size[-3] must be <= 4 for RGB (and maybe D). Got {input_size[-3]}. Image order should be CHW. "
         assert conv_kernel_size > 0, "kernel_size must be > 0"
         assert n_channels is None or (len(n_channels) > 0 and all([n > 0 for n in n_channels]) and n_channels[0]==input_size[0]), "n_channels must be a list of integers > 0"
         assert maxpool_kernel_size > 0, "maxpool_size must be > 0"
@@ -114,7 +114,7 @@ class CNN(BaseArchitecture):
         assert type(input_size) == tuple, "input_size must be a tuple"
         assert type(output_size) == tuple, "output_size must be a tuple"
         assert len(input_size) == 3, "input_size must be a tuple of length 3, CHW"
-        assert input_size[-3] <= 4, f"input_size[-3] must be <= 4 for RGB (and maybe D). Got {input_size[-3]}. Image order should be CHW. "
+        # assert input_size[-3] <= 4, f"input_size[-3] must be <= 4 for RGB (and maybe D). Got {input_size[-3]}. Image order should be CHW. "
         assert type(input_size) == tuple, "input_size must be a tuple"
         assert len(input_size) == 3, "input_size must be a tuple of length 3, CHW"
         assert input_size[-3] <= 4, f"input_size[-3] must be <= 4 for RGB (and maybe D). Got {input_size[-3]}. Image order should be CHW. "
