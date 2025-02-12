@@ -2,7 +2,7 @@
 
 A function encoder learns basis functions/vectors over arbitrary Hilbert spaces. This allows for zero-shot transfer within this learned by space by using a weighted combination of the basis functions to approximate any function in the space. The coefficients can be calculated quickly from a small amount of data, either using an inner product or the least squares method. The basis functions are learned from data as a neural network, which allows them to scale to high-dimensional function spaces. Furthermore, since the number of basis functions is fixed, this yields a fixed-size representation of the function which can be used for downstream tasks. 
 
-See [the original paper](https://arxiv.org/abs/2401.17173) for a mathematical introduction or [the blog](https://tyler-ingebrand.github.io/2024/05/04/zero-shot-RL.html) for an intuitive explanation of function encoders. 
+See [this paper](https://arxiv.org/abs/2501.18373) for an explanation of function encoders. 
 
 ## Installation
 For the latest stable release:
@@ -53,12 +53,11 @@ As distributions are also Hilbert spaces, we can apply the exact same algorithm.
 If you use this repo for research, please cite 
 
 ```
-@article{Ingebrand2024,
+@article{ingebrand_2025_fe_transfer,
   author       = {Tyler Ingebrand and
-                  Amy Zhang and
+                  Adam J. Thorpe and
                   Ufuk Topcu},
-  title        = {Zero-Shot Reinforcement Learning via Function Encoders},
-  booktitle    = {{ICML}},
-  year         = {2024},
+  title        = {Function Encoders: A Principled Approach to Transfer Learning in Hilbert Spaces},
+  year         = {2025}
 }
 ```
