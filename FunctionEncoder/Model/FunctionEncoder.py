@@ -35,7 +35,6 @@ class FunctionEncoder(torch.nn.Module):
                  model_type:Union[str, type]="MLP",
                  model_kwargs:dict=dict(),
                  method:str="least_squares", 
-                 use_residuals_method:bool=False,  
                  regularization_parameter:float=1.0, # if you normalize your data, this is usually good
                  gradient_accumulation:int=1, # default: no gradient accumulation
                  optimizer=torch.optim.Adam,
@@ -79,11 +78,6 @@ class FunctionEncoder(torch.nn.Module):
         
         # models and optimizers
         self.model = self._build(model_type, model_kwargs)
-        self.average_function = self._build(model_type, model_kwargs, average_function=True) if use_residuals_method else None
-        params = [*self.model.parameters()]
-        if self.average_function is not None:
-            params += [*self.average_function.parameters()]
-        self.opt = optimizer(params, **optimizer_kwargs) # usually ADAM with lr 1e-3
 
         # regulation only used for LS method
         self.regularization_parameter = regularization_parameter
@@ -96,7 +90,7 @@ class FunctionEncoder(torch.nn.Module):
 
         # verify number of parameters
         n_params = sum([p.numel() for p in self.parameters()])
-        estimated_n_params = FunctionEncoder.predict_number_params(input_size=input_size, output_size=output_size, n_basis=n_basis, model_type=model_type, model_kwargs=model_kwargs, use_residuals_method=use_residuals_method)
+        estimated_n_params = FunctionEncoder.predict_number_params(input_size=input_size, output_size=output_size, n_basis=n_basis, model_type=model_type, model_kwargs=model_kwargs, use_residuals_method=False)
         assert n_params == estimated_n_params, f"Model has {n_params} parameters, but expected {estimated_n_params} parameters."
 
 
@@ -187,13 +181,6 @@ class FunctionEncoder(torch.nn.Module):
             reshaped = True
             example_xs = example_xs.unsqueeze(0)
             example_ys = example_ys.unsqueeze(0)
-
-        # optionally subtract average function if we are using residuals method
-        # we dont want to backprop to the average function. So we block grads. 
-        if self.average_function is not None:
-            with torch.no_grad():
-                example_y_hat_average = self.average_function.forward(example_xs)
-                example_ys = example_ys - example_y_hat_average
 
         # compute representation
         Gs = self.model.forward(example_xs) # forward pass of the basis functions
@@ -484,16 +471,7 @@ class FunctionEncoder(torch.nn.Module):
         # this is weighted combination of basis functions
         Gs = self.model.forward(query_xs)
         y_hats = torch.einsum("fdmk,fk->fdm", Gs, representations)
-        
-        # optionally add the average function
-        # it is allowed to be precomputed, which is helpful for training
-        # otherwise, compute it
-        if self.average_function:
-            if precomputed_average_ys is not None:
-                average_ys = precomputed_average_ys
-            else:
-                average_ys = self.average_function.forward(query_xs)
-            y_hats = y_hats + average_ys
+
         return y_hats
 
     def predict_from_examples(self, 
@@ -529,106 +507,6 @@ class FunctionEncoder(torch.nn.Module):
         y_hats = self.predict(query_xs, representations)
         return y_hats
 
-
-    def estimate_L2_error(self, example_xs, example_ys):
-        """ Estimates the L2 error of the function encoder on the example data. 
-        This gives an idea if the example data lies in the span of the basis, or not.
-        
-        Args:
-        example_xs: torch.tensor: The example input data used to compute a representation. Shape (n_functions, n_example_datapoints, input_size)
-        example_ys: torch.tensor: The example output data used to compute a representation. Shape (n_functions, n_example_datapoints, output_size)
-        
-        Returns:
-        torch.tensor: The estimated L2 error. Shape (n_functions,)
-        """
-        representation, gram = self.compute_representation(example_xs, example_ys, method="least_squares")
-        f_hat_norm_squared = representation @ gram @ representation.T
-        f_norm_squared = self._inner_product(example_ys, example_ys)
-        l2_distance = torch.sqrt(f_norm_squared - f_hat_norm_squared)
-        return l2_distance
-
-
-
-    def train_model(self,
-                    dataset: BaseDataset,
-                    epochs: int,
-                    progress_bar=True,
-                    callback:BaseCallback=None,
-                    **kwargs):
-        """ Trains the function encoder on the dataset for some number of epochs.
-        
-        Args:
-        dataset: BaseDataset: The dataset to train on.
-        epochs: int: The number of epochs to train for.
-        progress_bar: bool: Whether to show a progress bar.
-        callback: BaseCallback: A callback to use during training. Can be used to test loss, etc. 
-        
-        Returns:
-        list[float]: The losses at each epoch."""
-
-        # verify dataset is correct
-        dataset.check_dataset()
-        
-        # set device
-        device = next(self.parameters()).device
-
-        # Let callbacks few starting data
-        if callback is not None:
-            callback.on_training_start(locals())
-
-        # method to use for representation during training
-        assert self.method in ["inner_product", "least_squares"], f"Unknown method: {self.method}"
-
-        losses = []
-        bar = trange(epochs) if progress_bar else range(epochs)
-        for epoch in bar:
-            example_xs, example_ys, query_xs, query_ys, _ = dataset.sample()
-
-            # train average function, if it exists
-            if self.average_function is not None:
-                # predict averages
-                expected_yhats = self.average_function.forward(query_xs)
-
-                # compute average function loss
-                average_function_loss = self._distance(expected_yhats, query_ys, squared=True).mean()
-                
-                # we only train average function to fit data in general, so block backprop from the basis function loss
-                expected_yhats = expected_yhats.detach()
-            else:
-                expected_yhats = None
-
-            # approximate functions, compute error
-            representation, gram = self.compute_representation(example_xs, example_ys, method=self.method, **kwargs)
-            y_hats = self.predict(query_xs, representation, precomputed_average_ys=expected_yhats)
-            prediction_loss = self._distance(y_hats, query_ys, squared=True).mean()
-
-            # LS requires regularization since it does not care about the scale of basis
-            # so we force basis to move towards unit norm. They dont actually need to be unit, but this prevents them
-            # from going to infinity.
-            if self.method == "least_squares":
-                norm_loss = ((torch.diagonal(gram, dim1=1, dim2=2) - 1)**2).mean()
-
-            # add loss components
-            loss = prediction_loss
-            if self.method == "least_squares":
-                loss = loss + self.regularization_parameter * norm_loss
-            if self.average_function is not None:
-                loss = loss + average_function_loss
-            
-            # backprop with gradient clipping
-            loss.backward()
-            if (epoch+1) % self.gradient_accumulation == 0:
-                norm = torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
-                self.opt.step()
-                self.opt.zero_grad()
-
-            # callbacks
-            if callback is not None:
-                callback.on_step(locals())
-
-        # let callbacks know its done
-        if callback is not None:
-            callback.on_training_end(locals())
 
     def _param_string(self):
         """ Returns a dictionary of hyperparameters for logging."""
