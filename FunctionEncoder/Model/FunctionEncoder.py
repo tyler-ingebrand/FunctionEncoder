@@ -9,6 +9,7 @@ from FunctionEncoder.Model.Architecture.BaseArchitecture import BaseArchitecture
 from FunctionEncoder.Model.Architecture.CNN import CNN
 from FunctionEncoder.Model.Architecture.Euclidean import Euclidean
 from FunctionEncoder.Model.Architecture.MLP import MLP
+from FunctionEncoder.Model.Architecture.NeuralODE import NeuralODE
 from FunctionEncoder.Model.Architecture.ParallelMLP import ParallelMLP
 
 
@@ -140,6 +141,12 @@ class FunctionEncoder(torch.nn.Module):
                            n_basis=self.n_basis,
                            learn_basis_functions=not average_function,
                            **model_kwargs)
+            elif model_type == "NeuralODE":
+                return NeuralODE(input_size=self.input_size,
+                                    output_size=self.output_size,
+                                    n_basis=self.n_basis,
+                                    learn_basis_functions=not average_function,
+                                    **model_kwargs)
             else:
                 raise ValueError(f"Unknown model type: {model_type}. Should be one of 'MLP', 'ParallelMLP', 'Euclidean', or 'CNN'")
         else:  # otherwise, assume it is a class and directly instantiate it
@@ -664,6 +671,10 @@ class FunctionEncoder(torch.nn.Module):
             n_params += CNN.predict_number_params(input_size, output_size, n_basis,  learn_basis_functions=True, **model_kwargs)
             if use_residuals_method:
                 n_params += CNN.predict_number_params(input_size, output_size, n_basis, learn_basis_functions=False, **model_kwargs)
+        elif model_type == "NeuralODE":
+            n_params += NeuralODE.predict_number_params(input_size, output_size, n_basis,  learn_basis_functions=True, **model_kwargs)
+            if use_residuals_method:
+                n_params += NeuralODE.predict_number_params(input_size, output_size, n_basis, learn_basis_functions=False, **model_kwargs)
         elif isinstance(model_type, type):
             n_params += model_type.predict_number_params(input_size, output_size, n_basis,  learn_basis_functions=True, **model_kwargs)
             if use_residuals_method:
