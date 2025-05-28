@@ -61,3 +61,4 @@ If you use this repo for research, please cite
   year         = {2025}
 }
 ```
+For the full experiments corresponding to this paper, see [here](https://github.com/tyler-ingebrand/FEtransfer).
