@@ -14,7 +14,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_basis", type=int, default=100)
 parser.add_argument("--train_method", type=str, default="least_squares")
-parser.add_argument("--epochs", type=int, default=1_000)
+parser.add_argument("--grad_steps", type=int, default=1_000)
 parser.add_argument("--load_path", type=str, default=None)
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--residuals", action="store_true")
@@ -22,53 +22,53 @@ args = parser.parse_args()
 
 
 # hyper params
-epochs = args.epochs
-n_basis = args.n_basis
 device = "cuda" if torch.cuda.is_available() else "cpu"
-train_method = args.train_method
-seed = args.seed
-load_path = args.load_path
-residuals = args.residuals
-if load_path is None:
-    logdir = f"logs/cifar_example/{train_method}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+if args.load_path is None:
+    logdir = f"logs/cifar_example/{args.train_method}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
 else:
-    logdir = load_path
+    logdir = args.load_path
 
 # seed torch
-torch.manual_seed(seed)
+torch.manual_seed(args.seed)
 
 # create a dataset
-dataset = CIFARDataset()
+train_dataset = CIFARDataset()
+test_dataset = CIFARDataset(heldout_classes_only=True)
+train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True)
+test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=10, shuffle=True)
 
-if load_path is None:
-    # create the model
-    model = FunctionEncoder(input_size=dataset.input_size,
-                            output_size=dataset.output_size,
-                            data_type=dataset.data_type,
-                            n_basis=n_basis,
-                            method=train_method,
-                            model_type="CNN",
-                            use_residuals_method=residuals).to(device)
+# create the model
+model = FunctionEncoder(input_size=train_dataset.input_size,
+                        output_size=train_dataset.output_size,
+                        data_type=train_dataset.data_type,
+                        n_basis=args.n_basis,
+                        method=args.train_method,
+                        model_type="CNN",
+                        use_residuals_method=args.residuals).to(device)
 
+if args.load_path is None:
     # create callbacks
     cb1 = TensorboardCallback(logdir) # this one logs training data
-    cb2 = DistanceCallback(dataset, tensorboard=cb1.tensorboard) # this one tests and logs the results
+    cb2 = DistanceCallback(test_dataloader, tensorboard=cb1.tensorboard) # this one tests and logs the results
     callback = ListCallback([cb1, cb2])
 
     # train the model
-    model.train_model(dataset, epochs=epochs, callback=callback)
+    model.train_model(train_dataloader, grad_steps=args.grad_steps, callback=callback)
 
     # save the model
     torch.save(model.state_dict(), f"{logdir}/model.pth")
 else:
-    # load the model
-    model = FunctionEncoder(input_size=dataset.input_size,
-                            output_size=dataset.output_size,
-                            data_type=dataset.data_type,
-                            n_basis=n_basis,
-                            method=train_method,
-                            use_residuals_method=residuals).to(device)
     model.load_state_dict(torch.load(f"{logdir}/model.pth"))
+
+
+
+
+
+
+
+
+
+
 
 # plot
 
@@ -163,11 +163,11 @@ def plot(example_xs, y_hats, info, dataset, logdir, filename,):
 dataset = CIFARDataset(split="test")
 
 # ID test
-example_xs, example_ys, xs, ys, info = dataset.sample()
+example_xs, example_ys, xs, ys, info = next(iter(train_dataloader))
 y_hats = model.predict_from_examples(example_xs, example_ys, xs)
 plot(example_xs, y_hats, info, dataset, logdir, "in_distribution")
 
 # OOD Test
-example_xs, example_ys, xs, ys, info = dataset.sample(heldout=True) # heldout classes
+example_xs, example_ys, xs, ys, info = next(iter(test_dataloader)) # heldout classes
 y_hats = model.predict_from_examples(example_xs, example_ys, xs)
 plot(example_xs, y_hats, info, dataset, logdir, "out_of_distribution")

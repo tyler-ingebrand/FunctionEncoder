@@ -5,6 +5,8 @@ import torch
 from abc import abstractmethod
 from typing import Tuple, Union
 
+from FunctionEncoder.Model.InnerProduct import INNER_PRODUCTS
+
 
 class BaseDataset:
     """ Base class for all datasets. Follow this interface to interact with FunctionEncoder.py"""
@@ -12,19 +14,10 @@ class BaseDataset:
                  input_size:Tuple[int],
                  output_size:Tuple[int],
                  data_type:str,
-                 n_functions:int=None,
                  n_examples:int=None,
                  n_queries:int=None,
                  dtype: torch.dtype = torch.float32,
                  device: str = "auto",
-
-                 # these arguments are deprecated and will be removed in the future
-                 # we have since renamed them to be more descriptive
-                 total_n_functions:Union[int, float]=None,
-                 total_n_samples_per_function:Union[int, float]=None,
-                 n_functions_per_sample:int=None,
-                 n_examples_per_sample:int=None,
-                 n_points_per_sample:int=None,
                  ):
         """ Constructor for BaseDataset
         
@@ -44,16 +37,13 @@ class BaseDataset:
         n_examples_per_sample (int): Deprecated. Number of examples to sample from the dataset per function per gradient step. Use n_examples instead.
         n_points_per_sample (int): Deprecated. Number of queries to sample from the dataset per function per gradient step. Use n_queries instead.
         """
-        n_functions, n_examples, n_queries = self.handle_deprecations(total_n_functions, total_n_samples_per_function, n_functions_per_sample, n_examples_per_sample, n_points_per_sample, n_functions, n_examples, n_queries)
         assert len(input_size) >= 1, "input_size must be a tuple of at least one element"
         assert len(output_size) >= 1, "output_size must be a tuple of at least one element"
-        assert 1 <= n_functions <= float("inf"), "n_functions must be a positive integer"
         assert 1 <= n_queries <= float("inf"), "n_queries must be a positive integer"
         assert 1 <= n_examples <= float("inf"), "n_examples must be a positive integer"
-        assert data_type in ["deterministic", "stochastic", "categorical"]
+        assert data_type in INNER_PRODUCTS.keys(), f"data_type must be one of {list(INNER_PRODUCTS.keys())}, got {data_type}"
         self.input_size = input_size
         self.output_size = output_size
-        self.n_functions = n_functions
         self.n_examples = n_examples
         self.n_queries = n_queries
         self.data_type = data_type.lower()
@@ -63,70 +53,31 @@ class BaseDataset:
         self.dtype = dtype
 
 
-    def handle_deprecations(self,
-                 total_n_functions,
-                 total_n_samples_per_function,
-                 n_functions_per_sample,
-                 n_examples_per_sample,
-                 n_points_per_sample,
-                 n_functions,
-                 n_examples,
-                 n_queries):
-        """ Handle deprecated arguments. """
-        if total_n_functions is not None:
-            warnings.warn("""total_n_functions is deprecated. This argument is not needed by the interface, so its been removed. 
-                            However, this is a good thing to know with respect to your dataset, so you should still be aware of it.""")
-        if total_n_samples_per_function is not None:
-            warnings.warn("""total_n_samples_per_function is deprecated. This argument is not needed by the interface, so its been removed. 
-                            However, this is a good thing to know with respect to your dataset, so you should still be aware of it.""")
-        if n_functions_per_sample is not None:
-            warnings.warn("""n_functions_per_sample has been renamed to n_functions. Please update your code accordingly. This old variable name
-                            will be removed in a future release.""")
-            if n_functions is not None and n_functions_per_sample != n_functions:
-                raise ValueError("n_functions and n_functions_per_sample are both provided, but they are different. Please only provide one, preferablly n_functions.")
-            n_functions = n_functions_per_sample
-        if n_examples_per_sample is not None:
-            warnings.warn("""n_examples_per_sample has been renamed to n_examples. Please update your code accordingly. This old variable name
-                            will be removed in a future release.""")
-            if n_examples is not None and n_examples_per_sample != n_examples:
-                raise ValueError("n_examples and n_examples_per_sample are both provided, but they are different. Please only provide one, preferablly n_examples.")
-            n_examples = n_examples_per_sample
-        if n_points_per_sample is not None:
-            warnings.warn("""n_points_per_sample has been renamed to n_queries. Please update your code accordingly. This old variable name
-                            will be removed in a future release.""")
-            if n_queries is not None and n_points_per_sample != n_queries:
-                raise ValueError("n_queries and n_points_per_sample are both provided, but they are different. Please only provide one, preferablly n_queries.")
-            n_queries = n_points_per_sample
-
-        if n_functions is None:
-            raise ValueError("n_functions must be provided")
-        if n_examples is None:
-            raise ValueError("n_examples must be provided")
-        if n_queries is None:
-            raise ValueError("n_queries must be provided")
-        return n_functions, n_examples, n_queries
-
     @abstractmethod
-    def sample(self) -> Tuple[  torch.tensor,
-                                torch.tensor,                                                                 
-                                torch.tensor,
-                                torch.tensor,
-                                dict]:
-        """Sample a batch of functions from the dataset.
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
+        """
+        Retrieve a batch of data from the dataset.
 
         Returns:
-        torch.tensor: Example Input data to compute a representation. Shape is (n_functions, n_examples, input_size)
-        torch.tensor: Example Output data to compute a representation. Shape is (n_functions, n_examples, output_size)
-        torch.tensor: Input data to predict outputs for. Shape is (n_functions, n_queries, input_size)
-        torch.tensor: Output data, IE target of the prediction. Shape is (n_functions, n_queries, output_size)
+            example_xs (torch.Tensor): (n_functions, n_examples, *input_size)
+            example_ys (torch.Tensor): (n_functions, n_examples, *output_size)
+            query_xs (torch.Tensor): (n_functions, n_queries, *input_size)
+            query_ys (torch.Tensor): (n_functions, n_queries, *output_size)
+            info (dict): Additional information
         """
         pass
+
+    @abstractmethod
+    def __len__(self) -> int:
+        """Return the number of batches or functions available in the dataset."""
+        pass
+
 
     def check_dataset(self):
         """ Verify that a dataset is correctly implemented. Throws error if violated. 
         I would advise against overriding this method, as it is used to verify that the dataset is implemented correctly.
         However, if your use case is very different, you may need to."""
-        out = self.sample()
+        out = self.__getitem__(0)
         assert len(out) == 5, f"Expected 5 outputs, got {len(out)}"
         
         example_xs, example_ys, query_xs, query_ys, info = out
@@ -134,9 +85,9 @@ class BaseDataset:
         assert type(example_ys) == torch.Tensor, f"Expected example_ys to be a torch.Tensor, got {type(example_ys)}"
         assert type(query_xs) == torch.Tensor, f"Expected xs to be a torch.Tensor, got {type(query_ys)}"
         assert type(query_ys) == torch.Tensor, f"Expected ys to be a torch.Tensor, got {type(query_ys)}"
-        assert example_xs.shape == (self.n_functions, self.n_examples, *self.input_size), f"Expected example_xs shape to be {(self.n_functions, self.n_examples, *self.input_size)}, got {example_xs.shape}"
-        assert example_ys.shape == (self.n_functions, self.n_examples, *self.output_size), f"Expected example_ys shape to be {(self.n_functions, self.n_examples, *self.output_size)}, got {example_ys.shape}"
-        assert query_xs.shape == (self.n_functions, self.n_queries, *self.input_size), f"Expected xs shape to be {(self.n_functions, self.n_points_per_sample, *self.input_size)}, got {query_xs.shape}"
-        assert query_ys.shape == (self.n_functions, self.n_queries, *self.output_size), f"Expected ys shape to be {(self.n_functions, self.n_points_per_sample, *self.output_size)}, got {query_ys.shape}"
+        assert example_xs.shape == (self.n_examples, *self.input_size), f"Expected example_xs shape to be {( self.n_examples, *self.input_size)}, got {example_xs.shape}"
+        assert example_ys.shape == (self.n_examples, *self.output_size), f"Expected example_ys shape to be {(self.n_examples, *self.output_size)}, got {example_ys.shape}"
+        assert query_xs.shape == (self.n_queries, *self.input_size), f"Expected xs shape to be {(self.n_queries, *self.input_size)}, got {query_xs.shape}"
+        assert query_ys.shape == (self.n_queries, *self.output_size), f"Expected ys shape to be {(self.n_queries, *self.output_size)}, got {query_ys.shape}"
         assert type(info) == dict, f"Expected info to be a dict, got {type(info)}"
         assert example_xs.dtype == example_ys.dtype == query_xs.dtype == query_ys.dtype == self.dtype, f"Expected all tensors to have dtype {self.dtype}, got {example_xs.dtype}, {example_ys.dtype}, {query_xs.dtype}, {query_ys.dtype}"

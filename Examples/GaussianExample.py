@@ -10,14 +10,14 @@ from FunctionEncoder import FunctionEncoder, GaussianDataset, TensorboardCallbac
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_basis", type=int, default=100)
 parser.add_argument("--train_method", type=str, default="least_squares")
-parser.add_argument("--epochs", type=int, default=10000)
+parser.add_argument("--grad_steps", type=int, default=10000)
 parser.add_argument("--load_path", type=str, default=None)
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--residuals", action="store_true")
 args = parser.parse_args()
 
 # hyper params
-epochs = args.epochs
+grad_steps = args.grad_steps
 n_basis = args.n_basis
 device = "cuda"
 train_method = args.train_method
@@ -34,33 +34,28 @@ torch.manual_seed(seed)
 
 # create dataset
 dataset = GaussianDataset()
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=10, shuffle=True)
+
+# create the model
+model = FunctionEncoder(input_size=dataset.input_size,
+                        output_size=dataset.output_size,
+                        data_type=dataset.data_type,
+                        n_basis=n_basis,
+                        method=train_method,
+                        use_residuals_method=residuals).to(device)
 
 if load_path is None:
-    # create the model
-    model = FunctionEncoder(input_size=dataset.input_size,
-                            output_size=dataset.output_size,
-                            data_type=dataset.data_type,
-                            n_basis=n_basis,
-                            method=train_method,
-                            use_residuals_method=residuals).to(device)
-
     # create callbacks
     cb1 = TensorboardCallback(logdir) # this one logs training data
-    cb2 = DistanceCallback(dataset, tensorboard=cb1.tensorboard) # this one tests and logs the results
+    cb2 = DistanceCallback(dataloader, tensorboard=cb1.tensorboard) # this one tests and logs the results
     callback = ListCallback([cb1, cb2])
 
     # train the model
-    model.train_model(dataset, epochs=epochs, callback=callback)
+    model.train_model(dataloader, grad_steps=grad_steps, callback=callback)
 
     # save the model
     torch.save(model.state_dict(), f"{logdir}/model.pth")
 else:
-    # load the model
-    model = FunctionEncoder(input_size=dataset.input_size,
-                            output_size=dataset.output_size,
-                            n_basis=n_basis, 
-                            method=train_method,
-                            use_residuals_method=residuals).to(device)
     model.load_state_dict(torch.load(f"{logdir}/model.pth"))
 
 
@@ -72,7 +67,7 @@ with torch.no_grad():
     gs = plt.GridSpec(n_rows, n_cols + 1,  width_ratios=[4, 4, 4, 1])
     axes = [fig.add_subplot(gs[i // n_cols, i % n_cols], aspect='equal') for i in range(n_cols * n_rows)]
 
-    example_xs, example_ys, _, _, info = dataset.sample()
+    example_xs, example_ys, _, _, info = next(iter(dataloader))
 
     # compute pdf over full space
     # compute pdf at grid points and plot using plt

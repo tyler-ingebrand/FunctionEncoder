@@ -10,7 +10,7 @@ from FunctionEncoder.Callbacks.BaseCallback import BaseCallback
 class MSECallback(BaseCallback):
 
     def __init__(self,
-                 testing_dataset:BaseDataset,
+                 dataloader:torch.utils.data.DataLoader,
                  logdir: Union[str, None] = None,
                  tensorboard: Union[None, SummaryWriter] = None,
                  prefix="test",
@@ -19,7 +19,8 @@ class MSECallback(BaseCallback):
         assert logdir is not None or tensorboard is not None, "Either logdir or tensorboard must be provided"
         assert logdir is None or tensorboard is None, "Only one of logdir or tensorboard can be provided"
         super(MSECallback, self).__init__()
-        self.testing_dataset = testing_dataset
+        self.dataloader = dataloader
+        self.dataiter = iter(self.dataloader)
         if logdir is not None:
             self.tensorboard = SummaryWriter(logdir)
         else:
@@ -32,10 +33,14 @@ class MSECallback(BaseCallback):
             function_encoder = locals["self"]
 
             # sample testing data
-            example_xs, example_ys, query_xs, query_ys, info = self.testing_dataset.sample()
+            try:
+                example_xs, example_ys, query_xs, query_ys, info = next(self.dataiter)
+            except StopIteration:
+                self.dataiter = iter(self.dataloader)
+                example_xs, example_ys, query_xs, query_ys, info = next(self.dataiter)
 
             # compute representation
-            y_hats = function_encoder.predict_from_examples(example_xs, example_ys, query_xs, method="least_squares")
+            y_hats = function_encoder.predict_from_examples(example_xs, example_ys, query_xs)
 
             # measure mse
             loss = torch.mean((query_ys - y_hats) ** 2).item()

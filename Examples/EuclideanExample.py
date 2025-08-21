@@ -25,16 +25,23 @@ from FunctionEncoder.Callbacks.BaseCallback import BaseCallback
 class ListMSECallback(BaseCallback):
 
     def __init__(self,
-                 testing_dataset:BaseDataset,
+                 testing_datloader:torch.utils.data.DataLoader,
                  ):
         super(ListMSECallback, self).__init__()
-        self.testing_dataset = testing_dataset
+        self.testing_datloader = testing_datloader
         self.losses = []
+        self.dataiterator = iter(testing_datloader)
 
     def on_step(self, locals:dict):
         with torch.no_grad():
             function_encoder = locals["self"]
-            example_xs, example_ys, xs, ys, info = self.testing_dataset.sample()
+            try:
+                example_xs, example_ys, xs, ys, _ = next(self.dataiterator)
+            except StopIteration:
+                self.dataiterator = iter(self.testing_datloader)
+                example_xs, example_ys, xs, ys, _ = next(self.dataiterator)
+
+
             y_hats = function_encoder.predict_from_examples(example_xs, example_ys, xs, method=function_encoder.method, lambd=0.0)
             loss = torch.mean((ys - y_hats) ** 2).item()
             self.losses.append(loss)
@@ -49,13 +56,13 @@ def to_numpy(x):
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_basis", type=int, default=2)
 parser.add_argument("--train_method", type=str, default="inner_product")
-parser.add_argument("--epochs", type=int, default=1_000)
+parser.add_argument("--grad_steps", type=int, default=1_000)
 parser.add_argument("--seed", type=int, default=0)
 args = parser.parse_args()
 
 
 # hyper params
-epochs = args.epochs
+grad_steps = args.grad_steps
 n_basis = args.n_basis
 device = "cpu" # gpu is overkill here
 train_method = args.train_method
@@ -68,9 +75,11 @@ torch.manual_seed(seed)
 
 # create a dataset
 dataset = EuclideanDataset()
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=10, shuffle=True)
+
 
 # cb
-callback = ListMSECallback(dataset)
+callback = ListMSECallback(dataloader)
 
 # create the model
 model = FunctionEncoder(input_size=dataset.input_size,
@@ -91,19 +100,19 @@ fig = plt.figure(figsize=(width/100, height/100), dpi=100)
 gs = gridspec.GridSpec(nrows=1, ncols=2, width_ratios=[2, 1])
 ax = fig.add_subplot(gs[0], projection='3d')
 ax2 = fig.add_subplot(gs[1],) #  xmargin=0.5)
-ax2.set_aspect(epochs / 10)
+ax2.set_aspect(grad_steps / 10)
 fig.tight_layout()
 fig.subplots_adjust(wspace=-0.10)
 
-tbar = trange(epochs + 1)
+tbar = trange(grad_steps + 1)
 def update(frame):
     tbar.update(1)
     ax.cla()
     ax2.cla()
 
     # do a single gradient step
-    model.train_model(dataset, epochs=1, callback=callback, progress_bar=False)
-    g = model.model.basis
+    model.train_model(dataloader, grad_steps=1, callback=callback, progress_bar=False)
+    g = model.basis_functions.basis
     losses = callback.losses
 
     # plot the space we are fitting, ie the xy plane
@@ -122,7 +131,7 @@ def update(frame):
     # plot loss on second ax
     ax2.plot(losses, color="blue")
     ax2.set_yscale("log")
-    ax2.set_xlim(0, epochs)
+    ax2.set_xlim(0, grad_steps)
     ax2.set_ylim(1e-8, 2e-1)
     ax2.set_xlabel("Descent Step")
     ax2.set_ylabel("Loss")
@@ -132,7 +141,7 @@ def update(frame):
     ax.set_zlim(0, 1)
 
 
-ani = animation.FuncAnimation(plt.gcf(), update, frames=epochs, interval=50)
+ani = animation.FuncAnimation(plt.gcf(), update, frames=grad_steps, interval=50)
 FFwriter = animation.FFMpegWriter(fps=fps)
 ani.save(f'{logdir}/animation_{n_basis}b.mp4', writer = FFwriter)
 

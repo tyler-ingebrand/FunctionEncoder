@@ -12,7 +12,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_basis", type=int, default=100)
 parser.add_argument("--train_method", type=str, default="least_squares")
-parser.add_argument("--epochs", type=int, default=1_000)
+parser.add_argument("--grad_steps", type=int, default=1_000)
 parser.add_argument("--load_path", type=str, default=None)
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--residuals", action="store_true")
@@ -20,7 +20,7 @@ args = parser.parse_args()
 
 
 # hyper params
-epochs = args.epochs
+grad_steps = args.grad_steps
 n_basis = args.n_basis
 device = "cuda" if torch.cuda.is_available() else "cpu"
 train_method = args.train_method
@@ -37,35 +37,43 @@ torch.manual_seed(seed)
 
 # create a dataset
 dataset = CategoricalDataset()
+train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=10, shuffle=True)
+
+# create the model
+model = FunctionEncoder(input_size=dataset.input_size,
+                        output_size=dataset.output_size,
+                        data_type=dataset.data_type,
+                        n_basis=n_basis,
+                        method=train_method,
+                        use_residuals_method=residuals).to(device)
 
 if load_path is None:
-    # create the model
-    model = FunctionEncoder(input_size=dataset.input_size,
-                            output_size=dataset.output_size,
-                            data_type=dataset.data_type,
-                            n_basis=n_basis,
-                            method=train_method,
-                            use_residuals_method=residuals).to(device)
-
     # create callbacks
     cb1 = TensorboardCallback(logdir) # this one logs training data
-    cb2 = DistanceCallback(dataset, tensorboard=cb1.tensorboard) # this one tests and logs the results
+    cb2 = DistanceCallback(train_dataloader, tensorboard=cb1.tensorboard) # this one tests and logs the results
     callback = ListCallback([cb1, cb2])
 
     # train the model
-    model.train_model(dataset, epochs=epochs, callback=callback)
+    model.train_model(train_dataloader, grad_steps=grad_steps, callback=callback)
 
     # save the model
     torch.save(model.state_dict(), f"{logdir}/model.pth")
 else:
-    # load the model
-    model = FunctionEncoder(input_size=dataset.input_size,
-                            output_size=dataset.output_size,
-                            data_type=dataset.data_type,
-                            n_basis=n_basis,
-                            method=train_method,
-                            use_residuals_method=residuals).to(device)
     model.load_state_dict(torch.load(f"{logdir}/model.pth"))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # plot
 with torch.no_grad():
@@ -73,7 +81,7 @@ with torch.no_grad():
     n_examples = 100
 
     # SAMPLE DATA
-    example_xs, example_ys, xs, ys, info = dataset.sample()
+    example_xs, example_ys, xs, ys, info = next(iter(train_dataloader))
     example_xs, example_ys = example_xs[:, :n_examples, :], example_ys[:, :n_examples, :]
 
     # get predictions

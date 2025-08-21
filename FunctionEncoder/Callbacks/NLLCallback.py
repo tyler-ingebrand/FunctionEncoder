@@ -10,13 +10,14 @@ from FunctionEncoder.Callbacks.BaseCallback import BaseCallback
 class NLLCallback(BaseCallback):
 
     def __init__(self,
-                 testing_dataset:BaseDataset,
+                 dataloader:torch.utils.data.DataLoader,
                  logdir: Union[str, None] = None,
                  tensorboard: Union[None, SummaryWriter] = None,
                  prefix:str="test",
                  ):
         super(NLLCallback, self).__init__()
-        self.testing_dataset = testing_dataset
+        self.dataloader = dataloader
+        self.dataiterator = iter(self.dataloader)
         if logdir is not None:
             self.tensorboard = SummaryWriter(logdir)
         else:
@@ -30,10 +31,14 @@ class NLLCallback(BaseCallback):
             function_encoder = locals["self"]
 
             # sample testing data
-            example_xs, example_ys, query_xs, query_ys, info = self.testing_dataset.sample()
+            try:
+                example_xs, example_ys, query_xs, query_ys, info = next(self.dataiterator)
+            except StopIteration:
+                self.dataiterator = iter(self.dataloader)
+                example_xs, example_ys, query_xs, query_ys, info = next(self.dataiterator)
 
             # compute representation
-            logits = function_encoder.predict_from_examples(example_xs, example_ys, query_xs, method=function_encoder.method)
+            logits = function_encoder.predict_from_examples(example_xs, example_ys, query_xs)
 
             # measure mean_log_prob
             loss = -torch.mean(logits)
