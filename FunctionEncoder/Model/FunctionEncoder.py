@@ -302,9 +302,6 @@ class FunctionEncoder(torch.nn.Module):
         Returns:
         torch.tensor: The predicted output. Shape (n_functions, n_datapoints, output_size)
         """
-
-        assert len(query_xs.shape) == 2 + len(self.input_size), f"Expected xs to have shape (f,d,*n), got {query_xs.shape}"
-
         # this is weighted combination of basis functions
         Gs = self.forward_basis_functions(query_xs)
         y_hats = torch.einsum("...dmk,...k->...dm", Gs, representations)
