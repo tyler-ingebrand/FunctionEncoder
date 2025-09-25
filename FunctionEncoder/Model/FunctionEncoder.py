@@ -151,9 +151,7 @@ class FunctionEncoder(torch.nn.Module):
         Union[torch.tensor, None]: The gram matrix if using least squares method. None otherwise.
         """
         
-        assert example_xs.shape[-len(self.input_size):] == self.input_size, f"example_xs must have shape (..., {self.input_size}). Expected {self.input_size}, got {example_xs.shape[-len(self.input_size):]}"
         assert example_ys.shape[-len(self.output_size):] == self.output_size, f"example_ys must have shape (..., {self.output_size}). Expected {self.output_size}, got {example_ys.shape[-len(self.output_size):]}"
-        assert example_xs.shape[:-len(self.input_size)] == example_ys.shape[:-len(self.output_size)], f"example_xs and example_ys must have the same shape except for the last {len(self.input_size)} dimensions. Expected {example_xs.shape[:-len(self.input_size)]}, got {example_ys.shape[:-len(self.output_size)]}"
         if method == "inner_product":
             assert self.method != "least_squares", ("Cannot train using least squares, then eval using inner product. "
                                                     "If you train using LS, the basis functions are NOT orthonormal, "
@@ -338,14 +336,8 @@ class FunctionEncoder(torch.nn.Module):
         torch.tensor: The predicted output. Shape (n_functions, n_datapoints, output_size)
         """
 
-        assert len(example_xs.shape) == 2 + len(self.input_size), f"Expected example_xs to have shape (f,d,*n), got {example_xs.shape}"
         assert len(example_ys.shape) == 2 + len(self.output_size), f"Expected example_ys to have shape (f,d,*m), got {example_ys.shape}"
-        assert len(query_xs.shape) == 2 + len(self.input_size), f"Expected xs to have shape (f,d,*n), got {query_xs.shape}"
-        assert example_xs.shape[-len(self.input_size):] == self.input_size, f"Expected example_xs to have shape (..., {self.input_size}), got {example_xs.shape[-1]}"
         assert example_ys.shape[-len(self.output_size):] == self.output_size, f"Expected example_ys to have shape (..., {self.output_size}), got {example_ys.shape[-1]}"
-        assert query_xs.shape[-len(self.input_size):] == self.input_size, f"Expected xs to have shape (..., {self.input_size}), got {query_xs.shape[-1]}"
-        assert example_xs.shape[0] == example_ys.shape[0] == query_xs.shape[0], f"Expected example_xs and example_ys to have the same number of functions, got {example_xs.shape[0]} and {example_ys.shape[0]}"
-        assert example_xs.shape[1] == example_ys.shape[1], f"Expected example_xs and example_ys to have the same number of datapoints, got {example_xs.shape[1]} and {example_ys.shape[1]}"
 
         representations, _ = self.compute_representation(example_xs, example_ys, method=method, **kwargs)
         y_hats = self.predict(query_xs, representations)
