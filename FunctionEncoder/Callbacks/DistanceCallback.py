@@ -5,6 +5,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from FunctionEncoder import FunctionEncoder, BaseDataset
 from FunctionEncoder.Callbacks.BaseCallback import BaseCallback
+from FunctionEncoder.Model.FunctionEncoder import recursive_to_device
 
 
 class DistanceCallback(BaseCallback):
@@ -38,10 +39,11 @@ class DistanceCallback(BaseCallback):
 
             # sample testing data
             try:
-                example_xs, example_ys, query_xs, query_ys, info = next(self.data_iter)
+                data = next(self.data_iter)
             except StopIteration:
                 self.data_iter = iter(self.dataloader)
-                example_xs, example_ys, query_xs, query_ys, info = next(self.data_iter)
+                data = next(self.data_iter)
+            example_xs, example_ys, query_xs, query_ys, info = recursive_to_device(data, function_encoder.device)
 
 
             # compute representation
