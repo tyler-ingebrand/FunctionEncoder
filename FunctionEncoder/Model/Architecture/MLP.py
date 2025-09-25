@@ -34,6 +34,8 @@ class MLP(BaseArchitecture):
                  n_layers:int=4,
                  activation:str="relu"
                  ):
+        assert len(input_size) == 1, "MLP only supports 1D input"
+        assert len(output_size) == 1, "MLP only supports 1D outputs"
         super(MLP, self).__init__(
             input_size=input_size,
             output_size=output_size,

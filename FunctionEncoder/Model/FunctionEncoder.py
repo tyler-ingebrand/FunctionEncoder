@@ -11,6 +11,17 @@ from FunctionEncoder.Model.Architecture.build import build, predict_number_param
 from FunctionEncoder.Model.InnerProduct import INNER_PRODUCTS
 
 
+def recursive_to_device(data, device):
+    if isinstance(data, torch.Tensor):
+        return data.to(device)
+    elif isinstance(data, (list, tuple)):
+        return type(data)(recursive_to_device(d, device) for d in data)
+    elif isinstance(data, dict):
+        return {k: recursive_to_device(v, device) for k, v in data.items()}
+    else:
+        return data
+
+
 class FunctionEncoder(torch.nn.Module):
     """A function encoder learns basis functions/vectors over a Hilbert space.
 
@@ -55,18 +66,10 @@ class FunctionEncoder(torch.nn.Module):
         optimizer: torch.optim.Optimizer: The optimizer to use for training the model. Defaults to Adam.
         optimizer_kwargs: dict: The kwargs to pass to the optimizer. Defaults to {"lr": 1e-3}.
         """
-
-        if model_type == "MLP":
-            assert len(input_size) == 1, "MLP only supports 1D input"
-        if model_type == "ParallelMLP":
-            assert len(input_size) == 1, "ParallelMLP only supports 1D input"
-        if model_type == "CNN":
-            assert len(input_size) == 3, "CNN only supports 3D input"
         if isinstance(model_type, type):
             assert issubclass(model_type, BaseArchitecture), "model_type should be a subclass of BaseArchitecture. This just gives a way of predicting the number of parameters before init."
         assert len(input_size) in [1, 3], "Input must either be 1-Dimensional (euclidean vector) or 3-Dimensional (image)"
         assert input_size[0] >= 1, "Input size must be at least 1"
-        assert len(output_size) == 1, "Only 1D output supported for now"
         assert output_size[0] >= 1, "Output size must be at least 1"
         assert data_type in INNER_PRODUCTS.keys(), f"Unknown data type: {data_type}. Options are {INNER_PRODUCTS.keys()}."
         super(FunctionEncoder, self).__init__()
@@ -121,6 +124,8 @@ class FunctionEncoder(torch.nn.Module):
         estimated_n_params = FunctionEncoder.predict_number_params(input_size=input_size, output_size=output_size, n_basis=n_basis, model_type=model_type, model_kwargs=model_kwargs, use_residuals_method=use_residuals_method)
         assert n_params == estimated_n_params, f"Model has {n_params} parameters, but expected {estimated_n_params} parameters."
 
+        # store data iterator
+        self.data_iter = None
 
 
     def compute_representation(self, 
@@ -216,35 +221,46 @@ class FunctionEncoder(torch.nn.Module):
         """
 
         # Check input ranks
-        assert fs.ndim in [2, 3, 4], f"fs must have shape (d,m), (f,d,m), or (f,d,m,k), got {fs.shape}"
-        assert gs.ndim in [2, 3, 4], f"gs must have shape (d,m), (f,d,m), or (f,d,m,l), got {gs.shape}"
-        if fs.ndim == 2:
-            assert gs.ndim == 2, (f"If fs is 2D, gs must also be 2D, got fs={fs.shape} and gs={gs.shape}."
-                                  f"This is because the inner product depends on the distribution of inputs,"
-                                  f"and often the distribution is different per function, so this may cause"
-                                  f"erroneous inner product computation.")
+        size_m = len(self.output_size)
+        assert fs.ndim - size_m in [1, 2, 3], f"fs must have shape (d,*m), (f,d,*m), or (f,d,*m,k), got {fs.shape}"
+        assert gs.ndim - size_m in [1, 2, 3], f"gs must have shape (d,*m), (f,d,*m), or (f,d,*m,l), got {gs.shape}"
 
-        # Align shapes: add batch dim f if missing, and trailing feature dims if missing
-        if fs.ndim == 2:  # (d,m)
-            fs = fs.unsqueeze(0).unsqueeze(-1)  # -> (1,d,m,1)
-        elif fs.ndim == 3:  # (f,d,m)
-            fs = fs.unsqueeze(-1)  # -> (f,d,m,1)
+        # Add function dim if needed
+        # Input here could be d*m or fd*m or fd*mk
+        appended_function_dim = False
+        if fs.ndim - size_m == 1 and gs.ndim - size_m == 1:
+            appended_function_dim = True
+            fs = fs.unsqueeze(0)
+            gs = gs.unsqueeze(0)
 
-        if gs.ndim == 2:  # (d,m)
-            gs = gs.unsqueeze(0).unsqueeze(-1)  # -> (1,d,m,1)
-        elif gs.ndim == 3:  # (f,d,m)
-            gs = gs.unsqueeze(-1)  # -> (f,d,m,1)
+        # Add basis function dim if needed
+        # input here could be fd*m or fd*mk
+        added_basis_to_fs = False
+        if fs.ndim - size_m == 2:
+            fs = fs.unsqueeze(-1)
+            added_basis_to_fs = True
+        added_basis_to_gs = False
+        if gs.ndim - size_m == 2:
+            gs = gs.unsqueeze(-1)
+            added_basis_to_gs = True
 
         # Verify compatible sizes
         assert fs.shape[0] == gs.shape[0], f"Mismatch in f: {fs.shape[0]} vs {gs.shape[0]}"
         assert fs.shape[1] == gs.shape[1], f"Mismatch in d: {fs.shape[1]} vs {gs.shape[1]}"
-        assert fs.shape[2] == gs.shape[2], f"Mismatch in m: {fs.shape[2]} vs {gs.shape[2]}"
+        assert fs.shape[2:-1] == gs.shape[2:-1], f"Mismatch in m: {fs.shape[2:-1]} vs {gs.shape[2:-1]}"
 
         # Compute inner product
         ips = self._inner_product(fs, gs)
 
-        # Squeeze out only the added singleton dims to restore expected shapes
-        return ips.squeeze()
+        # now undo the extra dims.
+        if added_basis_to_gs:
+            ips = ips.squeeze(-1)
+        if added_basis_to_fs:
+            ips = ips.squeeze(-1)
+        if appended_function_dim:
+            ips = ips.squeeze(0)
+
+        return ips
 
     def _norm(self, fs:torch.tensor, squared=False) -> torch.tensor:
         """ Computes the norm of fs according to the chosen inner product.
@@ -290,8 +306,6 @@ class FunctionEncoder(torch.nn.Module):
         """
 
         assert len(query_xs.shape) == 2 + len(self.input_size), f"Expected xs to have shape (f,d,*n), got {query_xs.shape}"
-        # assert len(representations.shape) == 2, f"Expected representations to have shape (f,k), got {representations.shape}"
-        # assert query_xs.shape[0] == representations.shape[0], f"Expected xs and representations to have the same number of functions, got {query_xs.shape[0]} and {representations.shape[0]}"
 
         # this is weighted combination of basis functions
         Gs = self.forward_basis_functions(query_xs)
@@ -330,9 +344,8 @@ class FunctionEncoder(torch.nn.Module):
         assert example_xs.shape[-len(self.input_size):] == self.input_size, f"Expected example_xs to have shape (..., {self.input_size}), got {example_xs.shape[-1]}"
         assert example_ys.shape[-len(self.output_size):] == self.output_size, f"Expected example_ys to have shape (..., {self.output_size}), got {example_ys.shape[-1]}"
         assert query_xs.shape[-len(self.input_size):] == self.input_size, f"Expected xs to have shape (..., {self.input_size}), got {query_xs.shape[-1]}"
-        assert example_xs.shape[0] == example_ys.shape[0], f"Expected example_xs and example_ys to have the same number of functions, got {example_xs.shape[0]} and {example_ys.shape[0]}"
-        assert example_xs.shape[1] == example_xs.shape[1], f"Expected example_xs and example_ys to have the same number of datapoints, got {example_xs.shape[1]} and {example_ys.shape[1]}"
-        assert example_xs.shape[0] == query_xs.shape[0], f"Expected example_xs and xs to have the same number of functions, got {example_xs.shape[0]} and {query_xs.shape[0]}"
+        assert example_xs.shape[0] == example_ys.shape[0] == query_xs.shape[0], f"Expected example_xs and example_ys to have the same number of functions, got {example_xs.shape[0]} and {example_ys.shape[0]}"
+        assert example_xs.shape[1] == example_ys.shape[1], f"Expected example_xs and example_ys to have the same number of datapoints, got {example_xs.shape[1]} and {example_ys.shape[1]}"
 
         representations, _ = self.compute_representation(example_xs, example_ys, method=method, **kwargs)
         y_hats = self.predict(query_xs, representations)
@@ -356,6 +369,25 @@ class FunctionEncoder(torch.nn.Module):
         l2_distance = torch.sqrt(f_norm_squared - f_hat_norm_squared)
         return l2_distance
 
+    def get_data(self, data_loader: torch.utils.data.DataLoader):
+        # initialize iterator if needed
+        if self.data_iter is None:
+            self.data_iter = iter(data_loader)
+
+        # fetch data
+        try:
+            data = next(self.data_iter)
+        except StopIteration:
+            # restart iterator if we reach the end
+            self.data_iter = iter(data_loader)
+            data = next(self.data_iter)
+
+        # recursively change device of data
+        device = next(self.parameters()).device
+        data = recursive_to_device(data, device)
+
+        # return
+        return data
 
 
     def train_model(self,
@@ -393,15 +425,7 @@ class FunctionEncoder(torch.nn.Module):
         bar = trange(grad_steps) if progress_bar else range(grad_steps)
         for grad_step in bar:
             # fetch data
-            try:
-                example_xs, example_ys, query_xs, query_ys, _ = next(loader_iter)
-            except StopIteration:
-                # restart iterator if we reach the end
-                loader_iter = iter(dataloader)
-                example_xs, example_ys, query_xs, query_ys, _ = next(loader_iter)
-
-            # change device
-            example_xs, example_ys, query_xs, query_ys = example_xs.to(device), example_ys.to(device), query_xs.to(device), query_ys.to(device)
+            example_xs, example_ys, query_xs, query_ys, _ = self.get_data(dataloader)
 
             # train average function, if it exists
             if self.average_function is not None:
@@ -479,9 +503,6 @@ class FunctionEncoder(torch.nn.Module):
     def forward_basis_functions(self, xs:torch.tensor) -> torch.tensor:
         """ Forward pass of the basis functions. """
         Gs = self.basis_functions(xs)
-        assert Gs.shape == (xs.shape[:-len(self.input_size)] + self.output_size) + (self.n_basis,), \
-            (f"Expected Gs to have shape {xs.shape[:-len(self.input_size)] + (self.n_basis,) + self.output_size}, "
-             f"got {Gs.shape}")
         return Gs
 
     def forward_average_function(self, xs:torch.tensor) -> torch.tensor:

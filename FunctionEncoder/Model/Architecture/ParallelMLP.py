@@ -79,6 +79,8 @@ class ParallelMLP(BaseArchitecture):
         )
         assert type(input_size) == tuple, "input_size must be a tuple"
         assert type(output_size) == tuple, "output_size must be a tuple"
+        assert len(input_size) == 1, "Parallel MLP only supports 1D input"
+        assert len(output_size) == 1, "Parallel MLP only supports 1D outputs"
 
         if self.average_function:
             n_basis = 1
