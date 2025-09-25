@@ -43,7 +43,7 @@ class DistanceCallback(BaseCallback):
             except StopIteration:
                 self.data_iter = iter(self.dataloader)
                 data = next(self.data_iter)
-            example_xs, example_ys, query_xs, query_ys, info = recursive_to_device(data, function_encoder.device)
+            example_xs, example_ys, query_xs, query_ys, info = recursive_to_device(data, next(function_encoder.parameters()).device)
 
 
             # compute representation
