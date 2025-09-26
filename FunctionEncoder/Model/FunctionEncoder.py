@@ -299,7 +299,7 @@ class FunctionEncoder(torch.nn.Module):
         """
         # this is weighted combination of basis functions
         Gs = self.forward_basis_functions(query_xs)
-        y_hats = torch.einsum("...dmk,...k->...dm", Gs, representations)
+        y_hats = torch.einsum("fd...k,fk->fd...", Gs, representations)
         
         # optionally add the average function
         # it is allowed to be precomputed, which is helpful for training
