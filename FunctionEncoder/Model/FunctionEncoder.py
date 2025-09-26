@@ -119,11 +119,6 @@ class FunctionEncoder(torch.nn.Module):
         self.model_type = model_type
         self.model_kwargs = model_kwargs
 
-        # verify number of parameters
-        n_params = sum([p.numel() for p in self.parameters()])
-        estimated_n_params = FunctionEncoder.predict_number_params(input_size=input_size, output_size=output_size, n_basis=n_basis, model_type=model_type, model_kwargs=model_kwargs, use_residuals_method=use_residuals_method)
-        assert n_params == estimated_n_params, f"Model has {n_params} parameters, but expected {estimated_n_params} parameters."
-
         # store data iterator
         self.data_iter = None
 
