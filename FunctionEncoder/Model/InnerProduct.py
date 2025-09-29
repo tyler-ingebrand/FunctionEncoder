@@ -115,7 +115,7 @@ def _categorical_inner_product(fs: torch.tensor,
 # e.g. INNER_PRODUCTS["new_type"] = _new_inner_product_function
 INNER_PRODUCTS = {
     "deterministic": lambda fs, gs: _deterministic_inner_product(fs, gs, use_mean=False),
-    "deterministic_mean": lambda fs, gs: _deterministic_inner_product(fs, gs, use_mean=True),
+    "deterministic_mean": lambda fs, gs: _deterministic_inner_product(fs, gs, use_mean=True), # NOTE: When you use this to compute distance, it becomes MSE!
     "pdf": _pdf_inner_product,
     "categorical": _categorical_inner_product,
 }
